@@ -259,7 +259,7 @@ app.post('/buy', (req, res) => {
     addTransaction(newTransaction);
 
     // Notify clients about the new transaction
-    fetch('https://bitthemarket.com/notify-transaction', {
+    fetch('https://btmserver.onrender.com/notify-transaction', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -303,7 +303,7 @@ app.post('/sell', (req, res) => {
     addTransaction(newTransaction);
 
     // Notify clients about the new transaction
-    fetch('https://bitthemarket.com/notify-transaction', {
+    fetch('https://btmserver.onrender.com/notify-transaction', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
