@@ -5,10 +5,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use(cors({
-  origin: 'https://eclectic-kashata-7af9d3.netlify.app', // Allow only your domain
-}));
-
 // Initial holdings for assets
 let userHoldings = {
     BTC: 1000000,
