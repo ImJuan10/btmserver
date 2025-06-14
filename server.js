@@ -114,11 +114,11 @@ function simulatePriceChange(currentPrice, currency) {
     console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
 
     // Minor fluctuations outside of trends
-    let fluctuationStrength = Math.random() * 0.005 * (Math.random() < dynamicProbability ? -1 : 1);
+    let fluctuationStrength = Math.random() * 0.001 * (Math.random() < dynamicProbability ? -1 : 1);
 
     // Spike/Dip Probability
     const spikeProbability = 0.005;
-    const spikeMagnitude = Math.random() * 0.1 + 0.05; // 5% to 15%
+    const spikeMagnitude = Math.random() * 0.01 + 0.005; // 5% to 15%
 
     // Track trend state
     if (!simulatePriceChange.trendState) {
