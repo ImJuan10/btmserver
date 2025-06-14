@@ -7,7 +7,7 @@ app.use(express.json());
 
 // Initial holdings for assets
 let userHoldings = {
-    BTC: 1000000,
+    BTC: 0,
     ETH: 0,
     DOGE: 0,
     SHIB: 0,
@@ -16,7 +16,7 @@ let userHoldings = {
     LTC: 0,
     LUNA: 0,
     BC: 0,
-    USDT: 100,
+    USDT: 10000,
 };
 
 // Initial prices for assets
