@@ -21,15 +21,15 @@ let userHoldings = {
 
 // Initial prices for assets
 let prices = {
-    BTC: 0.00089,
-    ETH: 0.32,
-    DOGE: 0.0000869,
-    SHIB: 0.000007,
-    TON: 0.39,
-    TRX: 0.08,
-    LTC: 1.1,
-    LUNA: 1.35,
-    BC: 0.0001,
+    BTC: 1,
+    ETH: 1,
+    DOGE: 1,
+    SHIB: 1,
+    TON: 1,
+    TRX: 1,
+    LTC: 1,
+    LUNA: 1,
+    BC: 1,
     USDT: 1,
 };
 
