@@ -16,7 +16,7 @@ let userHoldings = {
     LTC: 0,
     LUNA: 0,
     BC: 0,
-    USDT: 10000,
+    USDT: 10000000,
 };
 
 // Initial prices for assets
