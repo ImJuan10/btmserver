@@ -10,26 +10,26 @@ let simulationHoldings = {
     BTC: 0,
     ETH: 0,
     DOGE: 0,
-    SHIB: 0,
-    TON: 0,
-    TRX: 0,
-    LTC: 0,
-    LUNA: 0,
-    BC: 0, // BC is primarily simulation-based
-    USDT: 10,
+    SHIB: 500000,
+    TON: 50,
+    TRX: 1000,
+    LTC: 5,
+    LUNA: 500,
+    BC: 100000, // BC is primarily simulation-based
+    USDT: 1000,
 };
 
 let realHoldings = {
-    BTC: 0,
-    ETH: 0,
-    DOGE: 0,
-    SHIB: 0,
-    TON: 0,
-    TRX: 0,
-    LTC: 0,
-    LUNA: 0,
+    BTC: 0.05,
+    ETH: 0.2,
+    DOGE: 500,
+    SHIB: 200000,
+    TON: 20,
+    TRX: 400,
+    LTC: 2,
+    LUNA: 200,
     BC: 0, // In real mode, BC holdings start at 0 or very low
-    USDT: 10,
+    USDT: 500,
 };
 
 // Separate price sets for simulation and "real" mode
@@ -108,118 +108,60 @@ const realHistoricalPrices = {
     TRX: [], LTC: [], LUNA: [], BC: [], USDT: [],
 };
 
+// Simulate price changes for crypto assets (only for simulation mode now)
 function simulatePriceChange(currentPrice, currency) {
-    // Configuration for trends
-    let trendDirection = Math.random() < 0.55 ? 1 : -1; // 1 for upward, -1 for downward
-    let trendLength = Math.floor(Math.random() * 10) + 5; // 5 to 15 iterations
-    let trendStrength = Math.random() * 0.02 + 0.01; // 1% to 3% per step
+    let trendDirection = Math.random() < 0.55 ? 1 : -1;
+    let trendLength = Math.floor(Math.random() * 10) + 5;
 
-    // Track start time if not already set
-    if (!simulatePriceChange.startTime) {
-        simulatePriceChange.startTime = Date.now(); // Record the program's start time in milliseconds
+    const stateKey = `${currency}-sim`; // Always for simulation
+    if (!simulatePriceChange.trendStates) {
+        simulatePriceChange.trendStates = {};
     }
-
-    // Calculate elapsed time in seconds
-    const elapsedTime = (Date.now() - simulatePriceChange.startTime) / 10;
-
-    // Function to calculate dynamic probability that toggles every minute
-    function getDynamicProbability(elapsed) {
-        const minutes = Math.floor(elapsed / 60); // Get elapsed time in whole minutes
-        return minutes % 2 === 0 ? 0.58 : 0.45; // Alternate between 0.7 and 0.5 every minute
-    }
-
-    // Calculate dynamic probability based on elapsed time
-    let dynamicProbability = getDynamicProbability(elapsedTime);
-
-    // Debug the calculated probability and elapsed time
-    console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
-
-    // Minor fluctuations outside of trends
-    let fluctuationStrength = Math.random() * 0.005 * (Math.random() < dynamicProbability ? -1 : 1);
-
-    // Spike/Dip Probability
-    const spikeProbability = 0.005;
-    const spikeMagnitude = Math.random() * 0.1 + 0.05; // 5% to 15%
-
-    // Track trend state
-    if (!simulatePriceChange.trendState) {
-        simulatePriceChange.trendState = {
+    if (!simulatePriceChange.trendStates[stateKey]) {
+        simulatePriceChange.trendStates[stateKey] = {
             remaining: trendLength,
             direction: trendDirection,
         };
     }
 
+    let dynamicProbability = 0.55;
+    let fluctuationStrength = Math.random() * 0.001 * (Math.random() < dynamicProbability ? -1 : 1);
+    const spikeProbability = 0.005;
+    const spikeMagnitude = Math.random() * 0.01 + 0.005;
+
     let changePercentage;
 
-    // Apply trend if active
-    if (simulatePriceChange.trendState.remaining > 0) {
-        changePercentage = simulatePriceChange.trendState.direction * trendStrength;
-        simulatePriceChange.trendState.remaining--;
+    if (simulatePriceChange.trendStates[stateKey].remaining > 0) {
+        changePercentage = simulatePriceChange.trendStates[stateKey].direction * (Math.random() * 0.02 + 0.01);
+        simulatePriceChange.trendStates[stateKey].remaining--;
     } else {
-        // Reset trend when it ends
-        simulatePriceChange.trendState = {
-            remaining: Math.floor(Math.random() * 10) + 5, // New trend length
-            direction: Math.random() < dynamicProbability ? 1 : -1, // Random direction
+        simulatePriceChange.trendStates[stateKey] = {
+            remaining: Math.floor(Math.random() * 10) + 5,
+            direction: Math.random() < dynamicProbability ? 1 : -1,
         };
         changePercentage = fluctuationStrength;
     }
 
-    // Apply spike/dip randomly
     if (Math.random() < spikeProbability) {
         changePercentage += spikeMagnitude * (Math.random() < dynamicProbability ? -1 : 1);
     }
 
-    // Calculate new price
     let newPrice = currentPrice * (1 + changePercentage);
 
-    // Define multipliers
-    const fastIncreaseMultiplier = 1.01; // Boost price faster
-    const slowIncreaseMultiplier = 0.999; // Slow down price growth
+    const slowIncreaseMultiplier = 0.999;
 
-    // Apply multipliers based on price range
-    if (newPrice >= 3857) {
-        if (currency === 'ETH') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    } 
+    if (newPrice >= 3857 && currency === 'ETH') newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 5.75 && currency === 'DOGE') newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 0.075 && currency === 'SHIB') newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 15.12 && currency === 'TON') newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 315.12 && (currency === 'TRX' || currency === 'LTC' || currency === 'LUNA')) newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 100000 && (currency === 'BTC' || currency === 'BC')) newPrice *= slowIncreaseMultiplier;
 
-    if (newPrice >= 5.75) {
-        if (currency === 'DOGE') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-    
-    if (newPrice >= 0.075) {
-        if (currency === 'SHIB') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-
-    if (newPrice >= 15.12) {
-        if (currency === 'TON') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-
-    if (newPrice >= 315.12) {
-        if (currency === 'TRX' || currency === 'LTC' || currency === 'LUNA') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-
-    if (newPrice >= 100000) {
-        if (currency === 'BTC' || currency === 'BC') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-
-    // Ensure stability for USDT or similar stablecoins
     if (currency === 'USDT') {
-        return Math.random() * (1.001 - 0.999) + 0.999; // Tiny fluctuation around 1.00
+        return Math.random() * (1.001 - 0.999) + 0.999;
     }
 
-    // Format price for low-value assets
-    return Math.max(newPrice, 0.0000000000001); // Ensure no negative or near-zero prices
+    return Math.max(newPrice, 0.0000000000001);
 }
 
 // Simulate price changes for fiat exchange rates
@@ -236,13 +178,18 @@ setInterval(() => {
     }
 }, 1000);
 
-// Periodically update "real" crypto prices (now simulated, not fetched from Binance)
+// Periodically update "real" crypto prices with a very subtle organic change
+// This simulates prices continuing from their last known value, rather than restarting trends.
 setInterval(() => {
     for (const currency in realPrices) {
         if (currency === 'BC') {
             realPrices[currency] = simulationPrices['BC']; // BC price remains tied to simulation
+        } else if (currency === 'USDT') {
+            realPrices[currency] = 1; // USDT remains stable at 1
         } else {
-            realPrices[currency] = simulatePriceChange(realPrices[currency], currency, true); // Use real mode simulation
+            const smallFluctuation = (Math.random() - 0.5) * 0.0005 * realPrices[currency]; // +/- 0.05%
+            realPrices[currency] += smallFluctuation;
+            realPrices[currency] = Math.max(realPrices[currency], 0.0000000000001); // Ensure no negative prices
         }
     }
 }, 2000); // Update "real" prices at a different interval (e.g., slower)
