@@ -48,7 +48,7 @@ let simulationPrices = {
 
 // Initialize real prices to 0, they will be populated by initializeRealPrices() before server starts
 let realPrices = {
-    BTC: 0, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
+    BTC: 1000, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
     TRX: 0, LTC: 0, LUNA: 0, BC: 0, USDT: 1,
 };
 
