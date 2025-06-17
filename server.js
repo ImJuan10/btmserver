@@ -5,22 +5,35 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Initial holdings for assets - remains shared as holdings are independent of price source
-let userHoldings = {
-    BTC: 0,
-    ETH: 0,
-    DOGE: 0,
-    SHIB: 0,
-    TON: 0,
-    TRX: 0,
-    LTC: 0,
-    LUNA: 0,
-    BC: 0,
-    USDT: 10, // USDT remains the base quote currency for crypto prices
+// Separate holdings for simulation and real modes
+let simulationHoldings = {
+    BTC: 0.1,
+    ETH: 0.5,
+    DOGE: 1000,
+    SHIB: 500000,
+    TON: 50,
+    TRX: 1000,
+    LTC: 5,
+    LUNA: 500,
+    BC: 100000, // BC is primarily simulation-based
+    USDT: 1000,
 };
 
-// Only maintain simulation prices as there's no mode selection
-let prices = {
+let realHoldings = {
+    BTC: 0.05,
+    ETH: 0.2,
+    DOGE: 500,
+    SHIB: 200000,
+    TON: 20,
+    TRX: 400,
+    LTC: 2,
+    LUNA: 200,
+    BC: 0, // In real mode, BC holdings start at 0 or very low
+    USDT: 500,
+};
+
+// Separate price sets for simulation and "real" mode
+let simulationPrices = {
     BTC: 0.00089,
     ETH: 0.32,
     DOGE: 0.0000869,
@@ -30,7 +43,13 @@ let prices = {
     LTC: 1.1,
     LUNA: 1.35,
     BC: 0.0001,
-    USDT: 1, // USDT is considered 1:1 for simplicity against itself
+    USDT: 1,
+};
+
+// Real prices will be fetched from Binance API
+let realPrices = {
+    BTC: 0, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
+    TRX: 0, LTC: 0, LUNA: 0, BC: 0.0001, USDT: 1, // Initialize with 0, BC from simulation
 };
 
 // Simulated exchange rates from USDT to other fiat currencies
@@ -41,8 +60,9 @@ let exchangeRates = {
     SOL: 3.75    // New: 1 USDT = 3.75 Peruvian Sol (initial value)
 };
 
-// Transactions array to store all transactions - always tied to the simulation logic
-const transactions = [];
+// Separate transactions arrays for simulation and real modes
+const simulationTransactions = [];
+const realTransactions = [];
 
 // Utility to get current date and time in desired format
 function getCurrentDateTime() {
@@ -52,34 +72,45 @@ function getCurrentDateTime() {
     return `${date} ${time}`;
 }
 
-// Add transaction to the table
-function addTransaction({ orderDate, type, pair, price, amount, total }) {
-    transactions.push({
+// Add transaction to the respective transaction table
+function addTransaction(mode, { orderDate, type, pair, price, amount, total }) {
+    const transactionRecord = {
         orderDate,
         type,
         pair,
         price,
         amount,
         total,
-    });
+    };
+    if (mode === 'real') {
+        realTransactions.push(transactionRecord);
+    } else {
+        simulationTransactions.push(transactionRecord);
+    }
 }
 
-// Store historical price data - only for simulation now
-const historicalPrices = {
+// Store historical price data for both modes
+const simulationHistoricalPrices = {
     BTC: [], ETH: [], DOGE: [], SHIB: [], TON: [],
     TRX: [], LTC: [], LUNA: [], BC: [], USDT: [],
 };
 
-// Simulate price changes for crypto assets
+const realHistoricalPrices = {
+    BTC: [], ETH: [], DOGE: [], SHIB: [], TON: [],
+    TRX: [], LTC: [], LUNA: [], BC: [], USDT: [],
+};
+
+// Simulate price changes for crypto assets (only for simulation mode now)
 function simulatePriceChange(currentPrice, currency) {
     let trendDirection = Math.random() < 0.55 ? 1 : -1;
     let trendLength = Math.floor(Math.random() * 10) + 5;
 
+    const stateKey = `${currency}-sim`; // Always for simulation
     if (!simulatePriceChange.trendStates) {
         simulatePriceChange.trendStates = {};
     }
-    if (!simulatePriceChange.trendStates[currency]) {
-        simulatePriceChange.trendStates[currency] = {
+    if (!simulatePriceChange.trendStates[stateKey]) {
+        simulatePriceChange.trendStates[stateKey] = {
             remaining: trendLength,
             direction: trendDirection,
         };
@@ -92,11 +123,11 @@ function simulatePriceChange(currentPrice, currency) {
 
     let changePercentage;
 
-    if (simulatePriceChange.trendStates[currency].remaining > 0) {
-        changePercentage = simulatePriceChange.trendStates[currency].direction * (Math.random() * 0.02 + 0.01);
-        simulatePriceChange.trendStates[currency].remaining--;
+    if (simulatePriceChange.trendStates[stateKey].remaining > 0) {
+        changePercentage = simulatePriceChange.trendStates[stateKey].direction * (Math.random() * 0.02 + 0.01);
+        simulatePriceChange.trendStates[stateKey].remaining--;
     } else {
-        simulatePriceChange.trendStates[currency] = {
+        simulatePriceChange.trendStates[stateKey] = {
             remaining: Math.floor(Math.random() * 10) + 5,
             direction: Math.random() < dynamicProbability ? 1 : -1,
         };
@@ -119,39 +150,87 @@ function simulatePriceChange(currentPrice, currency) {
     if (newPrice >= 100000 && (currency === 'BTC' || currency === 'BC')) newPrice *= slowIncreaseMultiplier;
 
     if (currency === 'USDT') {
-        return Math.random() * (1.001 - 0.999) + 0.999; // Tiny fluctuation around 1.00
+        return Math.random() * (1.001 - 0.999) + 0.999;
     }
 
-    return Math.max(newPrice, 0.0000000000001); // Ensure no negative or near-zero prices
+    return Math.max(newPrice, 0.0000000000001);
 }
 
 // Simulate price changes for fiat exchange rates
 function simulateExchangeRateChange(currentRate) {
-    const fluctuation = (Math.random() - 0.5) * 0.005; // +/- 0.5% fluctuation
+    const fluctuation = (Math.random() - 0.5) * 0.005;
     let newRate = currentRate + fluctuation;
-    return Math.max(0.001, newRate); // Ensure rate doesn't go to zero or negative
+    return Math.max(0.001, newRate);
 }
 
-// Periodically update crypto prices
-function updatePrices() {
-    for (const currency in prices) {
-        prices[currency] = simulatePriceChange(prices[currency], currency);
+// Function to fetch real prices from Binance API
+async function fetchPricesFromBinance() {
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'DOGEUSDT', 'SHIBUSDT', 'TONUSDT', 'TRXUSDT', 'LTCUSDT', 'LUNAUSDT'];
+    const binanceApiBase = 'https://api.binance.com/api/v3/ticker/price?symbol=';
+
+    const fetchedBinancePrices = {};
+    for (const symbol of symbols) {
+        try {
+            const response = await fetch(`${binanceApiBase}${symbol}`);
+            if (response.ok) {
+                const data = await response.json();
+                const baseCurrency = symbol.replace('USDT', '');
+                fetchedBinancePrices[baseCurrency] = parseFloat(data.price);
+            } else {
+                console.warn(`Could not fetch price for ${symbol} from Binance. Status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error(`Error fetching price for ${symbol} from Binance:`, error);
+        }
+    }
+
+    // Update realPrices with fetched data
+    for (const currency in realPrices) {
+        if (currency === 'BC') {
+            realPrices[currency] = simulationPrices['BC']; // BC always from simulation
+        } else if (currency === 'USDT') {
+            realPrices[currency] = 1; // USDT remains stable at 1
+        } else if (fetchedBinancePrices[currency]) {
+            realPrices[currency] = fetchedBinancePrices[currency];
+        } else {
+            // Fallback to simulation price if Binance data is not available for a coin
+            realPrices[currency] = simulationPrices[currency];
+            console.warn(`Falling back to simulation price for ${currency} as Binance data is unavailable.`);
+        }
     }
 }
-setInterval(updatePrices, 1000); // Update crypto prices every second
+
+
+// Periodically update simulation crypto prices
+setInterval(() => {
+    for (const currency in simulationPrices) {
+        simulationPrices[currency] = simulatePriceChange(simulationPrices[currency], currency);
+    }
+}, 1000); // Update simulation prices every second
+
+// Periodically update real crypto prices from Binance
+// Set a reasonable interval to avoid hitting API rate limits (e.g., every 5 seconds)
+setInterval(fetchPricesFromBinance, 1000);
 
 // Periodically update exchange rates
-function updateExchangeRates() {
-    // Only USD, EUR, and SOL rates will fluctuate relative to USDT (which is base 1)
+setInterval(() => {
     exchangeRates['USD'] = simulateExchangeRateChange(exchangeRates['USD']);
     exchangeRates['EUR'] = simulateExchangeRateChange(exchangeRates['EUR']);
-    exchangeRates['SOL'] = simulateExchangeRateChange(exchangeRates['SOL']); // Update SOL rate
-}
-setInterval(updateExchangeRates, 5000); // Update exchange rates every 5 seconds
+    exchangeRates['SOL'] = simulateExchangeRateChange(exchangeRates['SOL']);
+}, 5000);
 
-// Endpoint to get the current prices
+// Endpoint to get the current prices based on mode
 app.get('/prices', (req, res) => {
-    res.json(prices);
+    const mode = req.query.mode || 'simulation';
+    let pricesToReturn = {};
+
+    if (mode === 'real') {
+        pricesToReturn = { ...realPrices };
+        pricesToReturn['BC'] = simulationPrices['BC']; // Ensure BC price is always from simulation
+    } else {
+        pricesToReturn = { ...simulationPrices };
+    }
+    res.json(pricesToReturn);
 });
 
 // Endpoint to get the current exchange rates
@@ -159,45 +238,65 @@ app.get('/exchange-rates', (req, res) => {
     res.json(exchangeRates);
 });
 
-// Endpoint to get transactions
+// Endpoint to get transactions based on mode
 app.get('/transactions', (req, res) => {
-    res.json(transactions);
+    const mode = req.query.mode || 'simulation';
+    if (mode === 'real') {
+        res.json(realTransactions);
+    } else {
+        res.json(simulationTransactions);
+    }
 });
 
-// Endpoint to get user holdings
+// Endpoint to get user holdings based on mode
 app.get('/holdings', (req, res) => {
-    res.json(userHoldings);
+    const mode = req.query.mode || 'simulation';
+    if (mode === 'real') {
+        res.json(realHoldings);
+    } else {
+        res.json(simulationHoldings);
+    }
 });
 
 // Endpoint to handle buy orders
 app.post('/buy', (req, res) => {
-    const { pair, price, amount, total } = req.body;
+    const { mode, pair, price, amount, total } = req.body;
 
-    if (!pair || price <= 0 || amount <= 0 || total <= 0) {
+    if (!mode || !pair || price <= 0 || amount <= 0 || total <= 0) {
         return res.status(400).json({ message: 'Invalid transaction details.' });
     }
 
     const [baseCurrency, quoteCurrency] = pair.split('/');
 
-    if (userHoldings[quoteCurrency] < total) {
-        return res.status(400).json({ message: `Insufficient ${quoteCurrency} balance.` });
+    let targetHoldings = (mode === 'real') ? realHoldings : simulationHoldings;
+    let currentPrices = (mode === 'real') ? realPrices : simulationPrices;
+
+    // Special handling for BC coin: its price always comes from simulationPrices for transactions
+    if (baseCurrency === 'BC') {
+        currentPrices['BC'] = simulationPrices['BC'];
     }
 
-    userHoldings[quoteCurrency] -= total;
-    userHoldings[baseCurrency] = (userHoldings[baseCurrency] || 0) + amount;
+    // Recalculate total based on current prices from the selected mode
+    const calculatedTotal = amount * currentPrices[baseCurrency];
+
+    if (targetHoldings[quoteCurrency] < calculatedTotal) {
+        return res.status(400).json({ message: `Insufficient ${quoteCurrency} balance in ${mode} mode.` });
+    }
+
+    targetHoldings[quoteCurrency] -= calculatedTotal;
+    targetHoldings[baseCurrency] = (targetHoldings[baseCurrency] || 0) + amount;
 
     const newTransaction = {
         orderDate: getCurrentDateTime(),
         type: 'Buy',
         pair,
-        price: `${price} USDT`,
+        price: `${currentPrices[baseCurrency]} USDT`,
         amount: `${amount} ${baseCurrency}`,
-        total: `${total} USDT`,
+        total: `${calculatedTotal} USDT`,
     };
 
-    addTransaction(newTransaction);
+    addTransaction(mode, newTransaction);
 
-    // Notify clients about the new transaction
     fetch('https://btmserver.onrender.com/notify-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,40 +305,50 @@ app.post('/buy', (req, res) => {
 
     res.json({
         message: 'Transaction successful!',
-        holdings: userHoldings,
+        holdings: targetHoldings,
     });
 });
 
 
 // Endpoint to handle sell orders
 app.post('/sell', (req, res) => {
-    const { pair, price, amount, total } = req.body;
+    const { mode, pair, price, amount, total } = req.body;
 
-    if (!pair || price <= 0 || amount <= 0 || total <= 0) {
+    if (!mode || !pair || price <= 0 || amount <= 0 || total <= 0) {
         return res.status(400).json({ message: 'Invalid transaction details.' });
     }
 
     const [baseCurrency, quoteCurrency] = pair.split('/');
 
-    if (userHoldings[baseCurrency] < amount) {
-        return res.status(400).json({ message: `Insufficient ${baseCurrency} balance.` });
+    let targetHoldings = (mode === 'real') ? realHoldings : simulationHoldings;
+    let currentPrices = (mode === 'real') ? realPrices : simulationPrices;
+
+    // Special handling for BC coin: its price always comes from simulationPrices for transactions
+    if (baseCurrency === 'BC') {
+        currentPrices['BC'] = simulationPrices['BC'];
     }
 
-    userHoldings[baseCurrency] -= amount;
-    userHoldings[quoteCurrency] = (userHoldings[quoteCurrency] || 0) + total;
+    // Recalculate total based on current prices from the selected mode
+    const calculatedTotal = amount * currentPrices[baseCurrency];
+
+    if (targetHoldings[baseCurrency] < amount) {
+        return res.status(400).json({ message: `Insufficient ${baseCurrency} balance in ${mode} mode.` });
+    }
+
+    targetHoldings[baseCurrency] -= amount;
+    targetHoldings[quoteCurrency] = (targetHoldings[quoteCurrency] || 0) + calculatedTotal;
 
     const newTransaction = {
         orderDate: getCurrentDateTime(),
         type: 'Sell',
         pair,
-        price: `${price} USDT`,
+        price: `${currentPrices[baseCurrency]} USDT`,
         amount: `${amount} ${baseCurrency}`,
-        total: `${total} USDT`,
+        total: `${calculatedTotal} USDT`,
     };
 
-    addTransaction(newTransaction);
+    addTransaction(mode, newTransaction);
 
-    // Notify clients about the new transaction
     fetch('https://btmserver.onrender.com/notify-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -248,26 +357,45 @@ app.post('/sell', (req, res) => {
 
     res.json({
         message: 'Sell order successful!',
-        holdings: userHoldings,
+        holdings: targetHoldings,
     });
 });
 
-// Update historical prices array periodically
+// Update historical prices arrays periodically
 function updateHistoricalPriceArrays() {
-    for (const currency in prices) {
-        if (!historicalPrices[currency]) historicalPrices[currency] = [];
-        historicalPrices[currency].push(prices[currency]);
-        if (historicalPrices[currency].length > 8640) historicalPrices[currency].shift();
+    // Update simulation historical prices
+    for (const currency in simulationPrices) {
+        if (!simulationHistoricalPrices[currency]) simulationHistoricalPrices[currency] = [];
+        simulationHistoricalPrices[currency].push(simulationPrices[currency]);
+        if (simulationHistoricalPrices[currency].length > 8640) simulationHistoricalPrices[currency].shift();
+    }
+
+    // Update real historical prices
+    for (const currency in realPrices) {
+        if (!realHistoricalPrices[currency]) realHistoricalPrices[currency] = [];
+        // For real historical prices, ensure BC is always from simulation historical prices
+        if (currency === 'BC') {
+            realHistoricalPrices[currency].push(simulationPrices[currency]); // Use current simulation price for BC
+        } else {
+            realHistoricalPrices[currency].push(realPrices[currency]);
+        }
+        if (realHistoricalPrices[currency].length > 8640) realHistoricalPrices[currency].shift();
     }
 }
-setInterval(updateHistoricalPriceArrays, 1000); // Update historical arrays every second
+setInterval(updateHistoricalPriceArrays, 1000);
 
-// Endpoint to retrieve historical price data for a specific pair
+// Endpoint to retrieve historical price data for a specific pair based on mode
 app.get('/prices/:pair', (req, res) => {
     const pair = req.params.pair;
     const [baseCurrency] = pair.split('/');
+    const mode = req.query.mode || 'simulation';
 
-    let targetHistoricalPricesSource = historicalPrices;
+    let targetHistoricalPricesSource;
+    if (mode === 'real' && baseCurrency !== 'BC') {
+        targetHistoricalPricesSource = realHistoricalPrices;
+    } else {
+        targetHistoricalPricesSource = simulationHistoricalPrices;
+    }
 
     if (targetHistoricalPricesSource[baseCurrency]) {
         res.json(targetHistoricalPricesSource[baseCurrency].map((price, index) => ({
@@ -283,14 +411,14 @@ app.get('/prices/:pair', (req, res) => {
 const events = require('events');
 const transactionEmitter = new events.EventEmitter();
 
-// Notify clients about new transactions
+// Notify clients about new transactions (currently only sends simulation-based notifications)
 app.post('/notify-transaction', (req, res) => {
     const newTransaction = req.body;
     transactionEmitter.emit('newTransaction', newTransaction);
     res.status(200).send('Notification sent');
 });
 
-// SSE endpoint for clients to subscribe
+// SSE endpoint for clients to subscribe (currently only streams simulation transactions)
 app.get('/transactions/stream', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -307,10 +435,11 @@ app.get('/transactions/stream', (req, res) => {
     });
 });
 
-// Store historical balances
-const historicalBalances = [];
+// Store historical balances for both modes
+const simulationHistoricalBalances = [];
+const realHistoricalBalances = [];
 
-// Function to calculate the current estimated balance
+// Function to calculate the current estimated balance for a given price set and holdings
 function calculateEstimatedBalance(currentPrices, holdings) {
     return Object.entries(holdings).reduce((total, [currency, holding]) => {
         const price = currentPrices[currency] || 0;
@@ -318,23 +447,40 @@ function calculateEstimatedBalance(currentPrices, holdings) {
     }, 0);
 }
 
-// Periodically update historical balances
+// Periodically update historical balances for both simulation and real modes
 function updateHistoricalBalances() {
-    const estimatedBalance = calculateEstimatedBalance(prices, userHoldings);
-    historicalBalances.push({
-        balance: estimatedBalance,
+    // For simulation mode
+    const simEstimatedBalance = calculateEstimatedBalance(simulationPrices, simulationHoldings);
+    simulationHistoricalBalances.push({
+        balance: simEstimatedBalance,
         timestamp: Date.now(),
     });
-    if (historicalBalances.length > 8640) {
-        historicalBalances.shift();
+    if (simulationHistoricalBalances.length > 8640) {
+        simulationHistoricalBalances.shift();
+    }
+
+    // For real mode
+    // Create an effective price object for real mode balance calculation, ensuring BC uses simulation price
+    let effectiveRealPricesForBalance = { ...realPrices };
+    effectiveRealPricesForBalance['BC'] = simulationPrices['BC']; // BC price always from simulation
+
+    const realEstimatedBalance = calculateEstimatedBalance(effectiveRealPricesForBalance, realHoldings);
+    realHistoricalBalances.push({
+        balance: realEstimatedBalance,
+        timestamp: Date.now(),
+    });
+    if (realHistoricalBalances.length > 8640) {
+        realHistoricalBalances.shift();
     }
 }
 
-setInterval(updateHistoricalBalances, 1000); // Update every second
+setInterval(updateHistoricalBalances, 1000);
 
-// Endpoint to retrieve historical balance data
+// Endpoint to retrieve historical balance data based on mode
 app.get('/balances', (req, res) => {
-    res.json(historicalBalances);
+    const mode = req.query.mode || 'simulation';
+    const historicalBalancesToReturn = (mode === 'real') ? realHistoricalBalances : simulationHistoricalBalances;
+    res.json(historicalBalancesToReturn);
 });
 
 app.get('/', (req, res) => {
