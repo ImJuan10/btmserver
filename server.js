@@ -5,7 +5,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Initial holdings for assets
+// Initial holdings for assets - remains shared as holdings are independent of price source
 let userHoldings = {
     BTC: 0,
     ETH: 0,
@@ -16,10 +16,10 @@ let userHoldings = {
     LTC: 0,
     LUNA: 0,
     BC: 0,
-    USDT: 10,
+    USDT: 10, // USDT remains the base quote currency for crypto prices
 };
 
-// Initial prices for assets
+// Only maintain simulation prices as there's no mode selection
 let prices = {
     BTC: 0.00089,
     ETH: 0.32,
@@ -30,10 +30,17 @@ let prices = {
     LTC: 1.1,
     LUNA: 1.35,
     BC: 0.0001,
-    USDT: 1,
+    USDT: 1, // USDT is considered 1:1 for simplicity against itself
 };
 
-// Transactions array to store all transactions
+// Simulated exchange rates from USDT to other fiat currencies
+let exchangeRates = {
+    USDT: 1, // USDT to USDT is 1
+    USD: 0.9995, // Example: 1 USDT = 0.9995 USD (can fluctuate)
+    EUR: 0.92,   // Example: 1 USDT = 0.92 EUR (can fluctuate)
+};
+
+// Transactions array to store all transactions - always tied to the simulation logic
 const transactions = [];
 
 // Utility to get current date and time in desired format
@@ -53,167 +60,101 @@ function addTransaction({ orderDate, type, pair, price, amount, total }) {
         price,
         amount,
         total,
-        from: '-',
-        to: '-',
-        rate: '-',
     });
 }
 
-// Calculate 24H Min and Max for each asset
-function calculate24HMinMax() {
-    const minMaxData = {};
+// Store historical price data - only for simulation now
+const historicalPrices = {
+    BTC: [], ETH: [], DOGE: [], SHIB: [], TON: [],
+    TRX: [], LTC: [], LUNA: [], BC: [], USDT: [],
+};
 
-    for (const [currency, priceHistory] of Object.entries(historicalPrices)) {
-        if (priceHistory.length >= 24) {
-            const last24Hours = priceHistory.slice(-24); // Get the last 24 hours of data
-            const minPrice = Math.min(...last24Hours);
-            const maxPrice = Math.max(...last24Hours);
-
-            minMaxData[currency] = {
-                min: minPrice,
-                max: maxPrice,
-            };
-        }
-    }
-
-    return minMaxData;
-}
-
-// Endpoint to get 24H Min and Max
-app.get('/price-24h-min-max', (req, res) => {
-    const minMaxData = calculate24HMinMax();
-    res.json(minMaxData);
-});
-
-
-// Simulate price changes
+// Simulate price changes for crypto assets
 function simulatePriceChange(currentPrice, currency) {
-    // Configuration for trends
-    let trendDirection = Math.random() < 0.55 ? 1 : -1; // 1 for upward, -1 for downward
-    let trendLength = Math.floor(Math.random() * 10) + 5; // 5 to 15 iterations
-    let trendStrength = Math.random() * 0.02 + 0.01; // 1% to 3% per step
+    let trendDirection = Math.random() < 0.55 ? 1 : -1;
+    let trendLength = Math.floor(Math.random() * 10) + 5;
 
-    // Track start time if not already set
-    if (!simulatePriceChange.startTime) {
-        simulatePriceChange.startTime = Date.now(); // Record the program's start time in milliseconds
+    if (!simulatePriceChange.trendStates) {
+        simulatePriceChange.trendStates = {};
     }
-
-    // Calculate elapsed time in seconds
-    const elapsedTime = (Date.now() - simulatePriceChange.startTime) / 10;
-
-    // Function to calculate dynamic probability that toggles every minute
-    function getDynamicProbability(elapsed) {
-        const minutes = Math.floor(elapsed / 60); // Get elapsed time in whole minutes
-        return minutes % 2 === 0 ? 0.58 : 0.45; // Alternate between 0.7 and 0.5 every minute
-    }
-
-    // Calculate dynamic probability based on elapsed time
-    let dynamicProbability = getDynamicProbability(elapsedTime);
-
-    // Debug the calculated probability and elapsed time
-    console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
-
-    // Minor fluctuations outside of trends
-    let fluctuationStrength = Math.random() * 0.001 * (Math.random() < dynamicProbability ? -1 : 1);
-
-    // Spike/Dip Probability
-    const spikeProbability = 0.005;
-    const spikeMagnitude = Math.random() * 0.01 + 0.005; // 5% to 15%
-
-    // Track trend state
-    if (!simulatePriceChange.trendState) {
-        simulatePriceChange.trendState = {
+    if (!simulatePriceChange.trendStates[currency]) {
+        simulatePriceChange.trendStates[currency] = {
             remaining: trendLength,
             direction: trendDirection,
         };
     }
 
+    let dynamicProbability = 0.55;
+    let fluctuationStrength = Math.random() * 0.001 * (Math.random() < dynamicProbability ? -1 : 1);
+    const spikeProbability = 0.005;
+    const spikeMagnitude = Math.random() * 0.01 + 0.005;
+
     let changePercentage;
 
-    // Apply trend if active
-    if (simulatePriceChange.trendState.remaining > 0) {
-        changePercentage = simulatePriceChange.trendState.direction * trendStrength;
-        simulatePriceChange.trendState.remaining--;
+    if (simulatePriceChange.trendStates[currency].remaining > 0) {
+        changePercentage = simulatePriceChange.trendStates[currency].direction * (Math.random() * 0.02 + 0.01);
+        simulatePriceChange.trendStates[currency].remaining--;
     } else {
-        // Reset trend when it ends
-        simulatePriceChange.trendState = {
-            remaining: Math.floor(Math.random() * 10) + 5, // New trend length
-            direction: Math.random() < dynamicProbability ? 1 : -1, // Random direction
+        simulatePriceChange.trendStates[currency] = {
+            remaining: Math.floor(Math.random() * 10) + 5,
+            direction: Math.random() < dynamicProbability ? 1 : -1,
         };
         changePercentage = fluctuationStrength;
     }
 
-    // Apply spike/dip randomly
     if (Math.random() < spikeProbability) {
         changePercentage += spikeMagnitude * (Math.random() < dynamicProbability ? -1 : 1);
     }
 
-    // Calculate new price
     let newPrice = currentPrice * (1 + changePercentage);
 
-    // Define multipliers
-    const fastIncreaseMultiplier = 1.01; // Boost price faster
-    const slowIncreaseMultiplier = 0.999; // Slow down price growth
+    const slowIncreaseMultiplier = 0.999;
 
-    // Apply multipliers based on price range
-    if (newPrice >= 3857) {
-        if (currency === 'ETH') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    } 
+    if (newPrice >= 3857 && currency === 'ETH') newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 5.75 && currency === 'DOGE') newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 0.075 && currency === 'SHIB') newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 15.12 && currency === 'TON') newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 315.12 && (currency === 'TRX' || currency === 'LTC' || currency === 'LUNA')) newPrice *= slowIncreaseMultiplier;
+    if (newPrice >= 100000 && (currency === 'BTC' || currency === 'BC')) newPrice *= slowIncreaseMultiplier;
 
-    if (newPrice >= 5.75) {
-        if (currency === 'DOGE') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-    
-    if (newPrice >= 0.075) {
-        if (currency === 'SHIB') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-
-    if (newPrice >= 15.12) {
-        if (currency === 'TON') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-
-    if (newPrice >= 315.12) {
-        if (currency === 'TRX' || currency === 'LTC' || currency === 'LUNA') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-
-    if (newPrice >= 100000) {
-        if (currency === 'BTC' || currency === 'BC') {
-            newPrice *= slowIncreaseMultiplier;
-        }
-    }
-
-    // Ensure stability for USDT or similar stablecoins
     if (currency === 'USDT') {
         return Math.random() * (1.001 - 0.999) + 0.999; // Tiny fluctuation around 1.00
     }
 
-    // Format price for low-value assets
     return Math.max(newPrice, 0.0000000000001); // Ensure no negative or near-zero prices
 }
 
-// Periodically update prices
+// Simulate price changes for fiat exchange rates
+function simulateExchangeRateChange(currentRate) {
+    const fluctuation = (Math.random() - 0.5) * 0.005; // +/- 0.5% fluctuation
+    let newRate = currentRate + fluctuation;
+    return Math.max(0.001, newRate); // Ensure rate doesn't go to zero or negative
+}
+
+// Periodically update crypto prices
 function updatePrices() {
     for (const currency in prices) {
         prices[currency] = simulatePriceChange(prices[currency], currency);
     }
-    console.log('Updated prices:', prices);
 }
+setInterval(updatePrices, 1000); // Update crypto prices every second
 
-setInterval(updatePrices, 1000); // Update prices every second
+// Periodically update exchange rates
+function updateExchangeRates() {
+    // Only USD and EUR rates will fluctuate relative to USDT (which is base 1)
+    exchangeRates['USD'] = simulateExchangeRateChange(exchangeRates['USD']);
+    exchangeRates['EUR'] = simulateExchangeRateChange(exchangeRates['EUR']);
+}
+setInterval(updateExchangeRates, 5000); // Update exchange rates every 5 seconds
 
-// Endpoint to get the prices
+// Endpoint to get the current prices
 app.get('/prices', (req, res) => {
     res.json(prices);
+});
+
+// Endpoint to get the current exchange rates
+app.get('/exchange-rates', (req, res) => {
+    res.json(exchangeRates);
 });
 
 // Endpoint to get transactions
@@ -257,9 +198,7 @@ app.post('/buy', (req, res) => {
     // Notify clients about the new transaction
     fetch('https://btmserver.onrender.com/notify-transaction', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTransaction),
     });
 
@@ -301,9 +240,7 @@ app.post('/sell', (req, res) => {
     // Notify clients about the new transaction
     fetch('https://btmserver.onrender.com/notify-transaction', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTransaction),
     });
 
@@ -313,80 +250,31 @@ app.post('/sell', (req, res) => {
     });
 });
 
-// Store historical price data
-const historicalPrices = {
-    BTC: [],
-    ETH: [],
-    DOGE: [],
-    SHIB: [],
-    TON: [],
-    TRX: [],
-    LTC: [],
-    LUNA: [],
-    BC: [],
-    // Add other currencies as needed
-};
-
-// Calculate percentage change function
-function calculatePercentageChange(current, previous) {
-    if (previous === 0) return 0;
-    return ((current - previous) / previous) * 100;
-}
-
-// Function to calculate changes based on historical data
-function calculateChanges(prices, intervals) {
-    const changes = {};
-
-    for (const [currency, priceHistory] of Object.entries(historicalPrices)) {
-        changes[currency] = {};
-
-        // Ensure price history has enough data
-        if (priceHistory.length > 0) {
-            const currentPrice = prices[currency];
-
-            intervals.forEach(([label, count]) => {
-                const historicalPrice = count === 'All' 
-                    ? priceHistory[0] // First recorded price
-                    : priceHistory[priceHistory.length - count] || priceHistory[0]; // Fallback if not enough data
-
-                changes[currency][label] = calculatePercentageChange(currentPrice, historicalPrice);
-            });
-        }
-    }
-
-    return changes;
-}
-
-// Update historical prices periodically
-function updateHistoricalPrices() {
+// Update historical prices array periodically
+function updateHistoricalPriceArrays() {
     for (const currency in prices) {
-        if (!historicalPrices[currency]) {
-            historicalPrices[currency] = [];
-        }
-
+        if (!historicalPrices[currency]) historicalPrices[currency] = [];
         historicalPrices[currency].push(prices[currency]);
-
-        // Limit the size of historical prices to 8640 (1 year of hourly data)
-        if (historicalPrices[currency].length > 8640) {
-            historicalPrices[currency].shift();
-        }
+        if (historicalPrices[currency].length > 8640) historicalPrices[currency].shift();
     }
 }
+setInterval(updateHistoricalPriceArrays, 1000); // Update historical arrays every second
 
-setInterval(updateHistoricalPrices, 1000); // Update every hour
+// Endpoint to retrieve historical price data for a specific pair
+app.get('/prices/:pair', (req, res) => {
+    const pair = req.params.pair;
+    const [baseCurrency] = pair.split('/');
 
-// Endpoint to calculate and return price changes
-app.get('/price-changes', (req, res) => {
-    const intervals = [
-        ['24H', 24],
-        ['7D', 168],
-        ['1M', 720],
-        ['1Y', 8640],
-        ['All', 'All'],
-    ];
+    let targetHistoricalPricesSource = historicalPrices;
 
-    const changes = calculateChanges(prices, intervals);
-    res.json(changes);
+    if (targetHistoricalPricesSource[baseCurrency]) {
+        res.json(targetHistoricalPricesSource[baseCurrency].map((price, index) => ({
+            price,
+            timestamp: Date.now() - ((targetHistoricalPricesSource[baseCurrency].length - 1 - index) * 1000),
+        })));
+    } else {
+        res.status(404).send('Pair not found');
+    }
 });
 
 
@@ -417,40 +305,24 @@ app.get('/transactions/stream', (req, res) => {
     });
 });
 
-app.get('/prices/:pair', (req, res) => {
-    const pair = req.params.pair;
-    const [baseCurrency] = pair.split('/');
-    if (historicalPrices[baseCurrency]) {
-        res.json(historicalPrices[baseCurrency].map((price, index) => ({
-            price,
-            timestamp: Date.now() - ((historicalPrices[baseCurrency].length - 1 - index) * 1000), // Example timestamp logic
-        })));
-    } else {
-        res.status(404).send('Pair not found');
-    }
-});
-
-
 // Store historical balances
 const historicalBalances = [];
 
 // Function to calculate the current estimated balance
-function calculateEstimatedBalance() {
-    return Object.entries(userHoldings).reduce((total, [currency, holding]) => {
-        const price = prices[currency] || 0;
+function calculateEstimatedBalance(currentPrices, holdings) {
+    return Object.entries(holdings).reduce((total, [currency, holding]) => {
+        const price = currentPrices[currency] || 0;
         return total + holding * price;
     }, 0);
 }
 
 // Periodically update historical balances
 function updateHistoricalBalances() {
-    const estimatedBalance = calculateEstimatedBalance();
+    const estimatedBalance = calculateEstimatedBalance(prices, userHoldings);
     historicalBalances.push({
         balance: estimatedBalance,
         timestamp: Date.now(),
     });
-
-    // Limit the size of the historical balances to 8640 (1 year of hourly data)
     if (historicalBalances.length > 8640) {
         historicalBalances.shift();
     }
@@ -470,5 +342,5 @@ app.get('/', (req, res) => {
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
