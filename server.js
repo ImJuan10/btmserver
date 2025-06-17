@@ -46,12 +46,10 @@ let simulationPrices = {
     USDT: 1,
 };
 
-// Real prices will be fetched from Binance API
+// Real prices will be fetched from CoinGecko API
 let realPrices = {
-    BTC: 65000, ETH: 3400, DOGE: 0.15, SHIB: 0.000025, TON: 7.5,
-    TRX: 0.12, LTC: 80, LUNA: 0.00015,
-    BC: 0.0001, // BC price remains tied to simulation
-    USDT: 1,
+    BTC: 0, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
+    TRX: 0, LTC: 0, LUNA: 0, BC: 0.0001, USDT: 1,
 };
 
 // Last successful real prices (for fallback)
@@ -129,9 +127,6 @@ function simulatePriceChange(currentPrice, currency) {
     // Calculate dynamic probability based on elapsed time (specific to this simulation logic)
     let dynamicProbability = getDynamicProbability(elapsedTime);
 
-    // Debug the calculated probability and elapsed time
-    // console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
-
     // Minor fluctuations outside of trends
     let fluctuationStrength = Math.random() * 0.005 * (Math.random() < dynamicProbability ? -1 : 1);
 
@@ -175,7 +170,6 @@ function simulatePriceChange(currentPrice, currency) {
     let newPrice = currentPrice * (1 + changePercentage);
 
     // Define multipliers
-    // const fastIncreaseMultiplier = 1.01; // Not used in provided snippet
     const slowIncreaseMultiplier = 0.999; // Slow down price growth
 
     // Apply multipliers based on price range
@@ -231,97 +225,67 @@ function simulateExchangeRateChange(currentRate) {
     return Math.max(0.001, newRate);
 }
 
-// Function to fetch real prices from Binance API
-async function fetchPricesFromBinance() {
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'DOGEUSDT', 'SHIBUSDT', 'TONUSDT', 'TRXUSDT', 'LTCUSDT', 'LUNAUSDT'];
-    const binanceApiBase = 'https://api.binance.com/api/v3/ticker/price?symbol=';
-    let fetchedBinancePrices = {};
-    let success = false;
+// Function to fetch real prices from CoinGecko API
+async function fetchPricesFromCoinGecko() {
+    // CoinGecko IDs for your cryptocurrencies
+    const coinGeckoIds = {
+        BTC: 'bitcoin',
+        ETH: 'ethereum',
+        DOGE: 'dogecoin',
+        SHIB: 'shiba-inu',
+        TON: 'toncoin',
+        TRX: 'tron',
+        LTC: 'litecoin',
+        LUNA: 'terra-luna', // Assuming classic LUNA based on its low initial price in your setup
+    };
+    const symbols = Object.values(coinGeckoIds);
+    const vsCurrency = 'usdt'; // Request prices in USDT
 
-    for (const symbol of symbols) {
-        try {
-            const response = await fetch(`${binanceApiBase}${symbol}`);
-            if (response.ok) {
-                const data = await response.json();
-                const baseCurrency = symbol.replace('USDT', '');
-                fetchedBinancePrices[baseCurrency] = parseFloat(data.price);
-                success = true; // At least one price fetched successfully
-            } else {
-                console.warn(`Could not fetch price for ${symbol} from Binance. Status: ${response.status}`);
+    const coinGeckoApiBase = 'https://api.coingecko.com/api/v3/simple/price';
+
+    try {
+        const response = await fetch(`${coinGeckoApiBase}?ids=${symbols.join(',')}&vs_currencies=${vsCurrency}`);
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Fetched CoinGecko data:', data); // Log the raw data for debugging
+
+            let fetchedCoinGeckoPrices = {};
+            for (const [key, id] of Object.entries(coinGeckoIds)) {
+                if (data[id] && data[id][vsCurrency] !== undefined) {
+                    fetchedCoinGeckoPrices[key] = parseFloat(data[id][vsCurrency]);
+                } else {
+                    console.warn(`CoinGecko price for ${key} (${id}) not found or undefined.`);
+                }
             }
-        } catch (error) {
-            console.error(`Error fetching price for ${symbol} from Binance:`, error);
+
+            // Update realPrices with newly fetched data, ensuring fallbacks
+            for (const currency in realPrices) {
+                if (currency === 'BC') {
+                    realPrices[currency] = simulationPrices['BC']; // BC always from simulation
+                } else if (currency === 'USDT') {
+                    realPrices[currency] = 1; // USDT remains stable at 1
+                } else if (fetchedCoinGeckoPrices[currency] !== undefined) {
+                    realPrices[currency] = fetchedCoinGeckoPrices[currency];
+                } else {
+                    // Fallback to last successful or simulation price if CoinGecko data is not available for a coin
+                    realPrices[currency] = lastSuccessfulRealPrices[currency] || simulationPrices[currency];
+                    console.warn(`Keeping last successful real price for ${currency} or falling back to simulation (CoinGecko data unavailable).`);
+                }
+            }
+            lastSuccessfulRealPrices = { ...realPrices }; // Update last successful prices
+            console.log('Real prices updated from CoinGecko (or fallback):', realPrices);
+
+        } else {
+            console.warn(`Could not fetch prices from CoinGecko. Status: ${response.status} ${response.statusText}. Using last successful prices.`);
+            // Fallback: realPrices retain last known values (from lastSuccessfulRealPrices)
+            realPrices = { ...lastSuccessfulRealPrices, BC: simulationPrices['BC'] };
         }
+    } catch (error) {
+        console.error('Error fetching prices from CoinGecko:', error);
+        // Fallback: realPrices retain last known values (from lastSuccessfulRealPrices)
+        realPrices = { ...lastSuccessfulRealPrices, BC: simulationPrices['BC'] };
+        console.warn('Network error during CoinGecko fetch. Using last successful real prices or initial values.');
     }
-
-    if (success) {
-        // Update realPrices with newly fetched data
-        for (const currency in realPrices) {
-            if (currency === 'BC') {
-                realPrices[currency] = simulationPrices['BC']; // BC always from simulation
-            } else if (currency === 'USDT') {
-                realPrices[currency] = 1; // USDT remains stable at 1
-            } else if (fetchedBinancePrices[currency]) {
-                realPrices[currency] = fetchedBinancePrices[currency];
-            } else {
-                // If a specific coin from the list failed, keep its last known price or fallback to simulation
-                realPrices[currency] = lastSuccessfulRealPrices[currency] || simulationPrices[currency];
-                console.warn(`Keeping last successful real price for ${currency} or falling back to simulation.`);
-            }
-        }
-        lastSuccessfulRealPrices = { ...realPrices }; // Update last successful prices
-        console.log('Real prices updated from Binance (or fallback):', realPrices);
-    } else {
-        // If no prices could be fetched from Binance, fall back to last successful or initial simulated prices
-        console.warn('No prices fetched from Binance. Falling back to last successful real prices or initial values.');
-        for (const currency in realPrices) {
-             if (currency === 'BC') {
-                realPrices[currency] = simulationPrices['BC'];
-            } else if (currency === 'USDT') {
-                realPrices[currency] = 1;
-            } else {
-                realPrices[currency] = lastSuccessfulRealPrices[currency] || simulationPrices[currency];
-            }
-        }
-    }
-}
-
-// Function to initialize realPrices (mimics fetching from an API)
-// This will set the initial realPrices array when the server starts
-async function initializeRealPrices() {
-    console.log('Initializing real prices...');
-    // Attempt to fetch initial real-world like prices from Binance directly
-    const symbolsToInitialize = ['BTC', 'ETH', 'DOGE', 'SHIB', 'TON', 'TRX', 'LTC', 'LUNA'];
-    const binanceApiBase = 'https://api.binance.com/api/v3/ticker/price?symbol=';
-
-    for (const currency of symbolsToInitialize) {
-        try {
-            const response = await fetch(`${binanceApiBase}${currency}USDT`);
-            if (response.ok) {
-                const data = await response.json();
-                realPrices[currency] = parseFloat(data.price);
-            } else {
-                console.warn(`Could not fetch initial real price for ${currency} from Binance. Status: ${response.status}. Using hardcoded default.`);
-                // Fallback to a hardcoded initial value if Binance fetch fails for this specific coin
-                realPrices[currency] = {
-                    BTC: 69500, ETH: 3800, DOGE: 0.16, SHIB: 0.000028, TON: 7.2,
-                    TRX: 0.11, LTC: 75, LUNA: 0.00013,
-                }[currency] || 0; // Provide a default if coin not found
-            }
-        } catch (error) {
-            console.error(`Error fetching initial real price for ${currency} from Binance:`, error);
-            // Fallback to a hardcoded initial value if network error occurs
-            realPrices[currency] = {
-                BTC: 69500, ETH: 3800, DOGE: 0.16, SHIB: 0.000028, TON: 7.2,
-                TRX: 0.11, LTC: 75, LUNA: 0.00013,
-            }[currency] || 0;
-        }
-    }
-    realPrices.BC = simulationPrices['BC']; // BC price always from simulation
-    realPrices.USDT = 1; // USDT always 1
-
-    lastSuccessfulRealPrices = { ...realPrices }; // Set initial last successful prices
-    console.log('Real prices initialized:', realPrices);
 }
 
 
@@ -332,8 +296,8 @@ setInterval(() => {
     }
 }, 1000);
 
-// Periodically update real crypto prices from Binance
-setInterval(fetchPricesFromBinance, 5000); // Attempt to fetch from Binance every 5 seconds
+// Periodically update real crypto prices from CoinGecko
+setInterval(fetchPricesFromCoinGecko, 5000); // Attempt to fetch from CoinGecko every 5 seconds
 
 
 // Periodically update exchange rates
@@ -616,5 +580,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     // Initialize real prices once when the server starts
-    initializeRealPrices();
+    initializeRealPrices(); // Initial fetch
 });
