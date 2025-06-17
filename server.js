@@ -46,10 +46,18 @@ let simulationPrices = {
     USDT: 1,
 };
 
-// Real prices will be fetched from Binance API
+// Re-implementing a separate simulation for "real" prices
 let realPrices = {
-    BTC: 0, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
-    TRX: 0, LTC: 0, LUNA: 0, BC: 0.0001, USDT: 1, // Initialize with 0, BC from simulation
+    BTC: 65000, // Starting real prices differently
+    ETH: 3400,
+    DOGE: 0.15,
+    SHIB: 0.000025,
+    TON: 7.5,
+    TRX: 0.12,
+    LTC: 80,
+    LUNA: 0.00015,
+    BC: 0.0001, // BC price remains tied to simulation
+    USDT: 1,
 };
 
 // Simulated exchange rates from USDT to other fiat currencies
@@ -100,12 +108,12 @@ const realHistoricalPrices = {
     TRX: [], LTC: [], LUNA: [], BC: [], USDT: [],
 };
 
-// Simulate price changes for crypto assets (only for simulation mode now)
-function simulatePriceChange(currentPrice, currency) {
+// Simulate price changes for crypto assets (used for both simulation and a new "real" simulation)
+function simulatePriceChange(currentPrice, currency, isRealMode = false) {
     let trendDirection = Math.random() < 0.55 ? 1 : -1;
     let trendLength = Math.floor(Math.random() * 10) + 5;
 
-    const stateKey = `${currency}-sim`; // Always for simulation
+    const stateKey = `${currency}-${isRealMode ? 'real' : 'sim'}`;
     if (!simulatePriceChange.trendStates) {
         simulatePriceChange.trendStates = {};
     }
@@ -116,15 +124,18 @@ function simulatePriceChange(currentPrice, currency) {
         };
     }
 
-    let dynamicProbability = 0.55;
+    // Adjust dynamicProbability and spikeProbability slightly for "real" mode simulation to differentiate
+    let dynamicProbability = isRealMode ? 0.52 : 0.55; // Slightly less bias for "real" mode
     let fluctuationStrength = Math.random() * 0.001 * (Math.random() < dynamicProbability ? -1 : 1);
-    const spikeProbability = 0.005;
+    const spikeProbability = isRealMode ? 0.002 : 0.005; // Less frequent spikes in "real" mode
     const spikeMagnitude = Math.random() * 0.01 + 0.005;
 
     let changePercentage;
 
     if (simulatePriceChange.trendStates[stateKey].remaining > 0) {
-        changePercentage = simulatePriceChange.trendStates[stateKey].direction * (Math.random() * 0.02 + 0.01);
+        // Use slightly different trend strength for "real" mode simulation if needed
+        let trendStrength = isRealMode ? (Math.random() * 0.015 + 0.005) : (Math.random() * 0.02 + 0.01);
+        changePercentage = simulatePriceChange.trendStates[stateKey].direction * trendStrength;
         simulatePriceChange.trendStates[stateKey].remaining--;
     } else {
         simulatePriceChange.trendStates[stateKey] = {
@@ -163,54 +174,24 @@ function simulateExchangeRateChange(currentRate) {
     return Math.max(0.001, newRate);
 }
 
-// Function to fetch real prices from Binance API
-async function fetchPricesFromBinance() {
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'DOGEUSDT', 'SHIBUSDT', 'TONUSDT', 'TRXUSDT', 'LTCUSDT', 'LUNAUSDT'];
-    const binanceApiBase = 'https://api.binance.com/api/v3/ticker/price?symbol=';
-
-    const fetchedBinancePrices = {};
-    for (const symbol of symbols) {
-        try {
-            const response = await fetch(`${binanceApiBase}${symbol}`);
-            if (response.ok) {
-                const data = await response.json();
-                const baseCurrency = symbol.replace('USDT', '');
-                fetchedBinancePrices[baseCurrency] = parseFloat(data.price);
-            } else {
-                console.warn(`Could not fetch price for ${symbol} from Binance. Status: ${response.status}`);
-            }
-        } catch (error) {
-            console.error(`Error fetching price for ${symbol} from Binance:`, error);
-        }
-    }
-
-    // Update realPrices with fetched data
-    for (const currency in realPrices) {
-        if (currency === 'BC') {
-            realPrices[currency] = simulationPrices['BC']; // BC always from simulation
-        } else if (currency === 'USDT') {
-            realPrices[currency] = 1; // USDT remains stable at 1
-        } else if (fetchedBinancePrices[currency]) {
-            realPrices[currency] = fetchedBinancePrices[currency];
-        } else {
-            // Fallback to simulation price if Binance data is not available for a coin
-            realPrices[currency] = simulationPrices[currency];
-            console.warn(`Falling back to simulation price for ${currency} as Binance data is unavailable.`);
-        }
-    }
-}
-
-
 // Periodically update simulation crypto prices
 setInterval(() => {
     for (const currency in simulationPrices) {
-        simulationPrices[currency] = simulatePriceChange(simulationPrices[currency], currency);
+        simulationPrices[currency] = simulatePriceChange(simulationPrices[currency], currency, false);
     }
-}, 1000); // Update simulation prices every second
+}, 1000);
 
-// Periodically update real crypto prices from Binance
-// Set a reasonable interval to avoid hitting API rate limits (e.g., every 5 seconds)
-setInterval(fetchPricesFromBinance, 1000);
+// Periodically update "real" crypto prices (now simulated, not fetched from Binance)
+setInterval(() => {
+    for (const currency in realPrices) {
+        if (currency === 'BC') {
+            realPrices[currency] = simulationPrices['BC']; // BC price remains tied to simulation
+        } else {
+            realPrices[currency] = simulatePriceChange(realPrices[currency], currency, true); // Use real mode simulation
+        }
+    }
+}, 2000); // Update "real" prices at a different interval (e.g., slower)
+
 
 // Periodically update exchange rates
 setInterval(() => {
