@@ -46,11 +46,16 @@ let simulationPrices = {
     USDT: 1,
 };
 
-// Initialize real prices to 0, they will be populated by initializeRealPrices() before server starts
+// Real prices will be fetched from Binance API
 let realPrices = {
-    BTC: 1000, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
-    TRX: 0, LTC: 0, LUNA: 0, BC: 0, USDT: 1,
+    BTC: 65000, ETH: 3400, DOGE: 0.15, SHIB: 0.000025, TON: 7.5,
+    TRX: 0.12, LTC: 80, LUNA: 0.00015,
+    BC: 0.0001, // BC price remains tied to simulation
+    USDT: 1,
 };
+
+// Last successful real prices (for fallback)
+let lastSuccessfulRealPrices = { ...realPrices };
 
 // Simulated exchange rates from USDT to other fiat currencies
 let exchangeRates = {
@@ -226,25 +231,59 @@ function simulateExchangeRateChange(currentRate) {
     return Math.max(0.001, newRate);
 }
 
-// Function to initialize realPrices (mimics fetching from an API)
-// This will set the initial realPrices array when the server starts
-async function initializeRealPrices() {
-    console.log('Initializing real prices...');
-    // Simulate fetching initial real-world like prices
-    // In a real application, this would be an actual API call to Binance or similar.
-    realPrices = {
-        BTC: 69500 + (Math.random() * 2000 - 1000), // Around 69.5k +/- 1k
-        ETH: 3800 + (Math.random() * 200 - 100),   // Around 3.8k +/- 100
-        DOGE: 0.16 + (Math.random() * 0.01 - 0.005),// Around 0.16 +/- 0.005
-        SHIB: 0.000028 + (Math.random() * 0.000001 - 0.0000005), // Around 0.000028 +/- small amount
-        TON: 7.2 + (Math.random() * 0.5 - 0.25),   // Around 7.2 +/- 0.25
-        TRX: 0.11 + (Math.random() * 0.005 - 0.0025),// Around 0.11 +/- 0.0025
-        LTC: 75 + (Math.random() * 3 - 1.5),      // Around 75 +/- 1.5
-        LUNA: 0.00013 + (Math.random() * 0.000005 - 0.0000025), // Around 0.00013 +/- small amount
-        BC: simulationPrices['BC'], // BC price always from simulation
-        USDT: 1, // USDT remains stable
-    };
-    console.log('Real prices initialized:', realPrices);
+// Function to fetch real prices from Binance API
+async function fetchPricesFromBinance() {
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'DOGEUSDT', 'SHIBUSDT', 'TONUSDT', 'TRXUSDT', 'LTCUSDT', 'LUNAUSDT'];
+    const binanceApiBase = 'https://api.binance.com/api/v3/ticker/price?symbol=';
+    let fetchedBinancePrices = {};
+    let success = false;
+
+    for (const symbol of symbols) {
+        try {
+            const response = await fetch(`${binanceApiBase}${symbol}`);
+            if (response.ok) {
+                const data = await response.json();
+                const baseCurrency = symbol.replace('USDT', '');
+                fetchedBinancePrices[baseCurrency] = parseFloat(data.price);
+                success = true; // At least one price fetched successfully
+            } else {
+                console.warn(`Could not fetch price for ${symbol} from Binance. Status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error(`Error fetching price for ${symbol} from Binance:`, error);
+        }
+    }
+
+    if (success) {
+        // Update realPrices with newly fetched data
+        for (const currency in realPrices) {
+            if (currency === 'BC') {
+                realPrices[currency] = simulationPrices['BC']; // BC always from simulation
+            } else if (currency === 'USDT') {
+                realPrices[currency] = 1; // USDT remains stable at 1
+            } else if (fetchedBinancePrices[currency]) {
+                realPrices[currency] = fetchedBinancePrices[currency];
+            } else {
+                // If a specific coin from the list failed, keep its last known price or fallback to simulation
+                realPrices[currency] = lastSuccessfulRealPrices[currency] || simulationPrices[currency];
+                console.warn(`Keeping last successful real price for ${currency} or falling back to simulation.`);
+            }
+        }
+        lastSuccessfulRealPrices = { ...realPrices }; // Update last successful prices
+        console.log('Real prices updated from Binance (or fallback):', realPrices);
+    } else {
+        // If no prices could be fetched from Binance, fall back to last successful or initial simulated prices
+        console.warn('No prices fetched from Binance. Falling back to last successful real prices or initial values.');
+        for (const currency in realPrices) {
+             if (currency === 'BC') {
+                realPrices[currency] = simulationPrices['BC'];
+            } else if (currency === 'USDT') {
+                realPrices[currency] = 1;
+            } else {
+                realPrices[currency] = lastSuccessfulRealPrices[currency] || simulationPrices[currency];
+            }
+        }
+    }
 }
 
 
@@ -255,21 +294,8 @@ setInterval(() => {
     }
 }, 1000);
 
-// Periodically update "real" crypto prices with a very subtle organic change
-// This simulates prices continuing from their last known value, rather than restarting trends.
-setInterval(() => {
-    for (const currency in realPrices) {
-        if (currency === 'BC') {
-            realPrices[currency] = simulationPrices['BC']; // BC price remains tied to simulation
-        } else if (currency === 'USDT') {
-            realPrices[currency] = 1; // USDT remains stable at 1
-        } else {
-            const smallFluctuation = (Math.random() - 0.5) * 0.0005 * realPrices[currency]; // +/- 0.05%
-            realPrices[currency] += smallFluctuation;
-            realPrices[currency] = Math.max(realPrices[currency], 0.0000000000001); // Ensure no negative prices
-        }
-    }
-}, 2000); // Update "real" prices at a different interval (e.g., slower)
+// Periodically update real crypto prices from Binance
+setInterval(fetchPricesFromBinance, 5000); // Attempt to fetch from Binance every 5 seconds
 
 
 // Periodically update exchange rates
@@ -551,4 +577,6 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    // Initialize real prices once when the server starts
+    initializeRealPrices();
 });
