@@ -7,29 +7,29 @@ app.use(express.json());
 
 // Separate holdings for simulation and real modes
 let simulationHoldings = {
-    BTC: 0.1,
-    ETH: 0.5,
-    DOGE: 1000,
-    SHIB: 500000,
-    TON: 50,
-    TRX: 1000,
-    LTC: 5,
-    LUNA: 500,
-    BC: 100000, // BC is primarily simulation-based
-    USDT: 1000,
+    BTC: 0,
+    ETH: 0,
+    DOGE: 0,
+    SHIB: 0,
+    TON: 0,
+    TRX: 0,
+    LTC: 0,
+    LUNA: 0,
+    BC: 0, // BC is primarily simulation-based
+    USDT: 10,
 };
 
 let realHoldings = {
-    BTC: 0.05,
-    ETH: 0.2,
-    DOGE: 500,
-    SHIB: 200000,
-    TON: 20,
-    TRX: 400,
-    LTC: 2,
-    LUNA: 200,
+    BTC: 0,
+    ETH: 0,
+    DOGE: 0,
+    SHIB: 0,
+    TON: 0,
+    TRX: 0,
+    LTC: 0,
+    LUNA: 0,
     BC: 0, // In real mode, BC holdings start at 0 or very low
-    USDT: 500,
+    USDT: 10,
 };
 
 // Separate price sets for simulation and "real" mode
