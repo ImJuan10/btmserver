@@ -286,6 +286,44 @@ async function fetchPricesFromBinance() {
     }
 }
 
+// Function to initialize realPrices (mimics fetching from an API)
+// This will set the initial realPrices array when the server starts
+async function initializeRealPrices() {
+    console.log('Initializing real prices...');
+    // Attempt to fetch initial real-world like prices from Binance directly
+    const symbolsToInitialize = ['BTC', 'ETH', 'DOGE', 'SHIB', 'TON', 'TRX', 'LTC', 'LUNA'];
+    const binanceApiBase = 'https://api.binance.com/api/v3/ticker/price?symbol=';
+
+    for (const currency of symbolsToInitialize) {
+        try {
+            const response = await fetch(`${binanceApiBase}${currency}USDT`);
+            if (response.ok) {
+                const data = await response.json();
+                realPrices[currency] = parseFloat(data.price);
+            } else {
+                console.warn(`Could not fetch initial real price for ${currency} from Binance. Status: ${response.status}. Using hardcoded default.`);
+                // Fallback to a hardcoded initial value if Binance fetch fails for this specific coin
+                realPrices[currency] = {
+                    BTC: 69500, ETH: 3800, DOGE: 0.16, SHIB: 0.000028, TON: 7.2,
+                    TRX: 0.11, LTC: 75, LUNA: 0.00013,
+                }[currency] || 0; // Provide a default if coin not found
+            }
+        } catch (error) {
+            console.error(`Error fetching initial real price for ${currency} from Binance:`, error);
+            // Fallback to a hardcoded initial value if network error occurs
+            realPrices[currency] = {
+                BTC: 69500, ETH: 3800, DOGE: 0.16, SHIB: 0.000028, TON: 7.2,
+                TRX: 0.11, LTC: 75, LUNA: 0.00013,
+            }[currency] || 0;
+        }
+    }
+    realPrices.BC = simulationPrices['BC']; // BC price always from simulation
+    realPrices.USDT = 1; // USDT always 1
+
+    lastSuccessfulRealPrices = { ...realPrices }; // Set initial last successful prices
+    console.log('Real prices initialized:', realPrices);
+}
+
 
 // Periodically update simulation crypto prices
 setInterval(() => {
