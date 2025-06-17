@@ -38,6 +38,7 @@ let exchangeRates = {
     USDT: 1, // USDT to USDT is 1
     USD: 0.9995, // Example: 1 USDT = 0.9995 USD (can fluctuate)
     EUR: 0.92,   // Example: 1 USDT = 0.92 EUR (can fluctuate)
+    SOL: 3.75    // New: 1 USDT = 3.75 Peruvian Sol (initial value)
 };
 
 // Transactions array to store all transactions - always tied to the simulation logic
@@ -141,9 +142,10 @@ setInterval(updatePrices, 1000); // Update crypto prices every second
 
 // Periodically update exchange rates
 function updateExchangeRates() {
-    // Only USD and EUR rates will fluctuate relative to USDT (which is base 1)
+    // Only USD, EUR, and SOL rates will fluctuate relative to USDT (which is base 1)
     exchangeRates['USD'] = simulateExchangeRateChange(exchangeRates['USD']);
     exchangeRates['EUR'] = simulateExchangeRateChange(exchangeRates['EUR']);
+    exchangeRates['SOL'] = simulateExchangeRateChange(exchangeRates['SOL']); // Update SOL rate
 }
 setInterval(updateExchangeRates, 5000); // Update exchange rates every 5 seconds
 
