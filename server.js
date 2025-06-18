@@ -46,14 +46,23 @@ let simulationPrices = {
     USDT: 1,
 };
 
-// Real prices will be initially set by initializeRealPrices(), then updated by fetchPricesFromCoinGecko()
+// Real prices will now be consistently simulated with subtle changes
 let realPrices = {
-    BTC: 0, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
-    TRX: 0, LTC: 0, LUNA: 0, BC: 0, USDT: 1,
+    // Initial realistic-looking values, these will drift subtly
+    BTC: 69500,
+    ETH: 3800,
+    DOGE: 0.16,
+    SHIB: 0.000028,
+    TON: 7.2,
+    TRX: 0.11,
+    LTC: 75,
+    LUNA: 0.00013,
+    BC: 0.0001, // BC price remains tied to simulation
+    USDT: 1,
 };
 
-// Last successful real prices (for fallback)
-let lastSuccessfulRealPrices = { ...realPrices };
+// lastSuccessfulRealPrices is no longer needed as there's no external fetch fallback logic
+// let lastSuccessfulRealPrices = { ...realPrices }; // REMOVED
 
 // Simulated exchange rates from USDT to other fiat currencies
 let exchangeRates = {
@@ -126,6 +135,9 @@ function simulatePriceChange(currentPrice, currency) {
 
     // Calculate dynamic probability based on elapsed time (specific to this simulation logic)
     let dynamicProbability = getDynamicProbability(elapsedTime);
+
+    // Debug the calculated probability and elapsed time
+    // console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
 
     // Minor fluctuations outside of trends
     let fluctuationStrength = Math.random() * 0.005 * (Math.random() < dynamicProbability ? -1 : 1);
@@ -225,94 +237,12 @@ function simulateExchangeRateChange(currentRate) {
     return Math.max(0.001, newRate);
 }
 
-// Function to fetch real prices from CoinGecko API (only fetches BTC now)
-async function fetchPricesFromCoinGecko() {
-    const coinGeckoApiBase = 'https://api.coingecko.com/api/v3/simple/price';
-    const vsCurrency = 'usdt';
+// REMOVED fetchPricesFromCoinGecko as it was causing 429 errors consistently.
+// Real prices will now be simulated internally with subtle changes.
+// async function fetchPricesFromCoinGecko() { ... } // REMOVED
 
-    try {
-        const response = await fetch(`${coinGeckoApiBase}?ids=bitcoin&vs_currencies=${vsCurrency}`);
-        if (response.ok) {
-            const data = await response.json();
-            
-            // Update BTC price
-            if (data.bitcoin && data.bitcoin[vsCurrency] !== undefined) {
-                realPrices.BTC = parseFloat(data.bitcoin[vsCurrency]);
-                lastSuccessfulRealPrices.BTC = realPrices.BTC; // Update last successful BTC price
-                console.log('Real BTC price updated from CoinGecko:', realPrices.BTC);
-            } else {
-                console.warn('CoinGecko BTC price not found or undefined. Using last successful BTC price.');
-                realPrices.BTC = lastSuccessfulRealPrices.BTC || simulationPrices.BTC;
-            }
-        } else {
-            console.warn(`Could not fetch BTC price from CoinGecko. Status: ${response.status} ${response.statusText}. Using last successful BTC price.`);
-            realPrices.BTC = lastSuccessfulRealPrices.BTC || simulationPrices.BTC;
-        }
-    } catch (error) {
-        console.error('Error fetching BTC price from CoinGecko:', error);
-        realPrices.BTC = lastSuccessfulRealPrices.BTC || simulationPrices.BTC;
-        console.warn('Network error during CoinGecko BTC fetch. Using last successful BTC price or initial values.');
-    }
-
-    // For other currencies in realPrices (ETH, DOGE, SHIB, TON, TRX, LTC, LUNA), apply subtle simulation
-    for (const currency in realPrices) {
-        if (currency === 'BTC' || currency === 'USDT' || currency === 'BC') {
-            // BTC is handled above, USDT is stable, BC is always simulation-based
-            continue;
-        }
-        
-        // Apply subtle organic change to other realPrices
-        const smallFluctuation = (Math.random() - 0.5) * 0.0005 * realPrices[currency]; // +/- 0.05%
-        realPrices[currency] += smallFluctuation;
-        realPrices[currency] = Math.max(realPrices[currency], 0.0000000000001); // Ensure no negative prices
-    }
-
-    realPrices.BC = simulationPrices['BC']; // Ensure BC price is always from simulation
-    realPrices.USDT = 1; // USDT always 1
-}
-
-// Function to initialize realPrices by attempting an API call for BTC or using sensible defaults
-async function initializeRealPrices() {
-    console.log('Initializing real prices on server startup...');
-    const vsCurrency = 'usdt';
-    const coinGeckoApiBase = 'https://api.coingecko.com/api/v3/simple/price';
-
-    // Initialize BTC first
-    try {
-        const response = await fetch(`${coinGeckoApiBase}?ids=bitcoin&vs_currencies=${vsCurrency}`);
-        if (response.ok) {
-            const data = await response.json();
-            if (data.bitcoin && data.bitcoin[vsCurrency] !== undefined) {
-                realPrices.BTC = parseFloat(data.bitcoin[vsCurrency]);
-            } else {
-                console.warn('Initial CoinGecko BTC price not found. Using hardcoded default.');
-                realPrices.BTC = 69500;
-            }
-        } else {
-            console.warn(`Could not fetch initial BTC price from CoinGecko. Status: ${response.status}. Using hardcoded default.`);
-            realPrices.BTC = 69500;
-        }
-    } catch (error) {
-        console.error('Error during initial CoinGecko BTC fetch:', error);
-        console.warn('Network error during initial CoinGecko BTC fetch. Using hardcoded default.');
-        realPrices.BTC = 69500;
-    }
-
-    // Initialize other real prices with fixed, realistic values
-    realPrices.ETH = 3800 + (Math.random() * 200 - 100);
-    realPrices.DOGE = 0.16 + (Math.random() * 0.01 - 0.005);
-    realPrices.SHIB = 0.000028 + (Math.random() * 0.000001 - 0.0000005);
-    realPrices.TON = 7.2 + (Math.random() * 0.5 - 0.25);
-    realPrices.TRX = 0.11 + (Math.random() * 0.005 - 0.0025);
-    realPrices.LTC = 75 + (Math.random() * 3 - 1.5);
-    realPrices.LUNA = 0.00013 + (Math.random() * 0.000005 - 0.0000025);
-    
-    realPrices.BC = simulationPrices['BC']; // BC price always from simulation
-    realPrices.USDT = 1; // USDT always 1
-
-    lastSuccessfulRealPrices = { ...realPrices }; // Set initial last successful prices
-    console.log('Real prices initialized:', realPrices);
-}
+// The initializeRealPrices function is no longer needed as realPrices are now initialized directly
+// async function initializeRealPrices() { ... } // REMOVED
 
 
 // Periodically update simulation crypto prices
@@ -322,8 +252,21 @@ setInterval(() => {
     }
 }, 1000);
 
-// Periodically update real crypto prices from CoinGecko (for BTC) and apply subtle simulation for others
-setInterval(fetchPricesFromCoinGecko, 15000); // Attempt to fetch from CoinGecko every 15 seconds to reduce 429 errors
+// Periodically update "real" crypto prices with a very subtle organic change
+// This simulates prices continuing from their last known value, rather than aggressive trends.
+setInterval(() => {
+    for (const currency in realPrices) {
+        if (currency === 'BC') {
+            realPrices[currency] = simulationPrices['BC']; // BC price remains tied to simulation
+        } else if (currency === 'USDT') {
+            realPrices[currency] = 1; // USDT remains stable at 1
+        } else {
+            const smallFluctuation = (Math.random() - 0.5) * 0.0005 * realPrices[currency]; // +/- 0.05%
+            realPrices[currency] += smallFluctuation;
+            realPrices[currency] = Math.max(realPrices[currency], 0.0000000000001); // Ensure no negative prices
+        }
+    }
+}, 2000); // Update "real" prices at a different interval (e.g., slower)
 
 
 // Periodically update exchange rates
@@ -605,6 +548,4 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    // Initialize real prices once when the server starts
-    initializeRealPrices(); // Initial fetch
 });
