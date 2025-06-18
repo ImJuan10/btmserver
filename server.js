@@ -46,23 +46,14 @@ let simulationPrices = {
     USDT: 1,
 };
 
-// Real prices will now be consistently simulated with subtle changes
+// Real prices will be initially set by initializeRealPrices(), then updated by fetchPricesFromCMC()
 let realPrices = {
-    // Initial realistic-looking values, these will drift subtly
-    BTC: 69500,
-    ETH: 3800,
-    DOGE: 0.16,
-    SHIB: 0.000028,
-    TON: 7.2,
-    TRX: 0.11,
-    LTC: 75,
-    LUNA: 0.00013,
-    BC: 0.0001, // BC price remains tied to simulation
-    USDT: 1,
+    BTC: 0, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
+    TRX: 0, LTC: 0, LUNA: 0, BC: 0, USDT: 1,
 };
 
-// lastSuccessfulRealPrices is no longer needed as there's no external fetch fallback logic
-// let lastSuccessfulRealPrices = { ...realPrices }; // REMOVED
+// Last successful real prices (for fallback)
+let lastSuccessfulRealPrices = { ...realPrices };
 
 // Simulated exchange rates from USDT to other fiat currencies
 let exchangeRates = {
@@ -237,12 +228,109 @@ function simulateExchangeRateChange(currentRate) {
     return Math.max(0.001, newRate);
 }
 
-// REMOVED fetchPricesFromCoinGecko as it was causing 429 errors consistently.
-// Real prices will now be simulated internally with subtle changes.
-// async function fetchPricesFromCoinGecko() { ... } // REMOVED
+// CMC API Key
+const CMC_API_KEY = 'fb3d7be2-38b1-4afd-b436-7ac1c56a8c49';
+const CMC_API_BASE = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest';
 
-// The initializeRealPrices function is no longer needed as realPrices are now initialized directly
-// async function initializeRealPrices() { ... } // REMOVED
+
+// Function to fetch real prices from CoinMarketCap API (only fetches BTC now)
+async function fetchPricesFromCMC() {
+    const symbolToFetch = 'BTC'; // Only fetching BTC as requested
+    const vsCurrency = 'USDT';
+
+    try {
+        const response = await fetch(`${CMC_API_BASE}?symbol=${symbolToFetch}&convert=${vsCurrency}`, {
+            headers: {
+                'X-CMC_PRO_API_KEY': CMC_API_KEY,
+                'Accept': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Check if BTC data exists and has the USDT price
+            if (data.data && data.data[symbolToFetch] && data.data[symbolToFetch].quote && data.data[symbolToFetch].quote[vsCurrency] && data.data[symbolToFetch].quote[vsCurrency].price !== undefined) {
+                realPrices.BTC = parseFloat(data.data[symbolToFetch].quote[vsCurrency].price);
+                lastSuccessfulRealPrices.BTC = realPrices.BTC; // Update last successful BTC price
+                // console.log('Real BTC price updated from CMC:', realPrices.BTC); // Log for debugging
+            } else {
+                console.warn(`CMC BTC price not found in response or undefined. Using last successful BTC price.`);
+                realPrices.BTC = lastSuccessfulRealPrices.BTC || simulationPrices.BTC; // Fallback
+            }
+        } else {
+            console.warn(`Could not fetch BTC price from CMC. Status: ${response.status} ${response.statusText}. Using last successful BTC price.`);
+            realPrices.BTC = lastSuccessfulRealPrices.BTC || simulationPrices.BTC; // Fallback
+        }
+    } catch (error) {
+        console.error('Error fetching BTC price from CMC:', error);
+        realPrices.BTC = lastSuccessfulRealPrices.BTC || simulationPrices.BTC; // Fallback
+        console.warn('Network error during CMC BTC fetch. Using last successful BTC price or initial values.');
+    }
+
+    // For other currencies in realPrices (ETH, DOGE, SHIB, TON, TRX, LTC, LUNA), apply subtle simulation
+    for (const currency in realPrices) {
+        if (currency === 'BTC' || currency === 'USDT' || currency === 'BC') {
+            // BTC is handled above, USDT is stable, BC is always simulation-based
+            continue;
+        }
+        
+        // Apply subtle organic change to other realPrices
+        const smallFluctuation = (Math.random() - 0.5) * 0.0005 * realPrices[currency]; // +/- 0.05%
+        realPrices[currency] += smallFluctuation;
+        realPrices[currency] = Math.max(realPrices[currency], 0.0000000000001); // Ensure no negative prices
+    }
+
+    realPrices.BC = simulationPrices['BC']; // Ensure BC price is always from simulation
+    realPrices.USDT = 1; // USDT always 1
+}
+
+// Function to initialize realPrices by attempting an API call for BTC or using sensible defaults
+async function initializeRealPrices() {
+    console.log('Initializing real prices on server startup...');
+    const symbolToFetch = 'BTC';
+    const vsCurrency = 'USDT';
+
+    try {
+        const response = await fetch(`${CMC_API_BASE}?symbol=${symbolToFetch}&convert=${vsCurrency}`, {
+            headers: {
+                'X-CMC_PRO_API_KEY': CMC_API_KEY,
+                'Accept': 'application/json'
+            }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            if (data.data && data.data[symbolToFetch] && data.data[symbolToFetch].quote && data.data[symbolToFetch].quote[vsCurrency] && data.data[symbolToFetch].quote[vsCurrency].price !== undefined) {
+                realPrices.BTC = parseFloat(data.data[symbolToFetch].quote[vsCurrency].price);
+            } else {
+                console.warn('Initial CMC BTC price not found in response. Using hardcoded default.');
+                realPrices.BTC = 69500;
+            }
+        } else {
+            console.warn(`Could not fetch initial BTC price from CMC. Status: ${response.status}. Using hardcoded default.`);
+            realPrices.BTC = 69500;
+        }
+    } catch (error) {
+        console.error('Error during initial CMC BTC fetch:', error);
+        console.warn('Network error during initial CMC BTC fetch. Using hardcoded default.');
+        realPrices.BTC = 69500;
+    }
+
+    // Initialize other real prices with fixed, realistic values (these will then be subtly simulated)
+    realPrices.ETH = 3800;
+    realPrices.DOGE = 0.16;
+    realPrices.SHIB = 0.000028;
+    realPrices.TON = 7.2;
+    realPrices.TRX = 0.11;
+    realPrices.LTC = 75;
+    realPrices.LUNA = 0.00013;
+    
+    realPrices.BC = simulationPrices['BC']; // BC price always from simulation
+    realPrices.USDT = 1; // USDT always 1
+
+    lastSuccessfulRealPrices = { ...realPrices }; // Set initial last successful prices
+    console.log('Real prices initialized:', realPrices);
+}
 
 
 // Periodically update simulation crypto prices
@@ -252,21 +340,8 @@ setInterval(() => {
     }
 }, 1000);
 
-// Periodically update "real" crypto prices with a very subtle organic change
-// This simulates prices continuing from their last known value, rather than aggressive trends.
-setInterval(() => {
-    for (const currency in realPrices) {
-        if (currency === 'BC') {
-            realPrices[currency] = simulationPrices['BC']; // BC price remains tied to simulation
-        } else if (currency === 'USDT') {
-            realPrices[currency] = 1; // USDT remains stable at 1
-        } else {
-            const smallFluctuation = (Math.random() - 0.5) * 0.0005 * realPrices[currency]; // +/- 0.05%
-            realPrices[currency] += smallFluctuation;
-            realPrices[currency] = Math.max(realPrices[currency], 0.0000000000001); // Ensure no negative prices
-        }
-    }
-}, 2000); // Update "real" prices at a different interval (e.g., slower)
+// Periodically update real crypto prices from CoinMarketCap (for BTC) and apply subtle simulation for others
+setInterval(fetchPricesFromCMC, 15000); // Attempt to fetch from CMC every 15 seconds
 
 
 // Periodically update exchange rates
@@ -548,4 +623,6 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    // initializeRealPrices is not called here anymore, as realPrices are defined with initial values
+    // and updated by setInterval(fetchPricesFromCMC, ...)
 });
