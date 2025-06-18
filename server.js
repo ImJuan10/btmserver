@@ -103,10 +103,6 @@ const realHistoricalPrices = {
     TRX: [], LTC: [], LUNA: [], BC: [], USDT: [],
 };
 
-// Simulate price changes for crypto assets (ONLY for simulation mode)
-// Consolidated trendState into a property of the function itself for persistence
-simulatePriceChange.trendState = {}; // Initialize a persistent state for the function
-simulatePriceChange.startTime = Date.now(); // Initialize startTime for dynamic probability
 
 function simulatePriceChange(currentPrice, currency) {
     // Configuration for trends
@@ -114,17 +110,25 @@ function simulatePriceChange(currentPrice, currency) {
     let trendLength = Math.floor(Math.random() * 10) + 5; // 5 to 15 iterations
     let trendStrength = Math.random() * 0.02 + 0.01; // 1% to 3% per step
 
+    // Track start time if not already set
+    if (!simulatePriceChange.startTime) {
+        simulatePriceChange.startTime = Date.now(); // Record the program's start time in milliseconds
+    }
+
     // Calculate elapsed time in seconds
     const elapsedTime = (Date.now() - simulatePriceChange.startTime) / 10;
 
     // Function to calculate dynamic probability that toggles every minute
     function getDynamicProbability(elapsed) {
         const minutes = Math.floor(elapsed / 60); // Get elapsed time in whole minutes
-        return minutes % 2 === 0 ? 0.58 : 0.45; // Alternate between 0.58 and 0.45 every minute
+        return minutes % 2 === 0 ? 0.58 : 0.45; // Alternate between 0.7 and 0.5 every minute
     }
 
     // Calculate dynamic probability based on elapsed time
     let dynamicProbability = getDynamicProbability(elapsedTime);
+
+    // Debug the calculated probability and elapsed time
+    console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
 
     // Minor fluctuations outside of trends
     let fluctuationStrength = Math.random() * 0.005 * (Math.random() < dynamicProbability ? -1 : 1);
@@ -133,9 +137,9 @@ function simulatePriceChange(currentPrice, currency) {
     const spikeProbability = 0.005;
     const spikeMagnitude = Math.random() * 0.1 + 0.05; // 5% to 15%
 
-    // Initialize trend state for the specific currency if not already set
-    if (!simulatePriceChange.trendState[currency]) {
-        simulatePriceChange.trendState[currency] = {
+    // Track trend state
+    if (!simulatePriceChange.trendState) {
+        simulatePriceChange.trendState = {
             remaining: trendLength,
             direction: trendDirection,
         };
@@ -144,12 +148,12 @@ function simulatePriceChange(currentPrice, currency) {
     let changePercentage;
 
     // Apply trend if active
-    if (simulatePriceChange.trendState[currency].remaining > 0) {
-        changePercentage = simulatePriceChange.trendState[currency].direction * trendStrength;
-        simulatePriceChange.trendState[currency].remaining--;
+    if (simulatePriceChange.trendState.remaining > 0) {
+        changePercentage = simulatePriceChange.trendState.direction * trendStrength;
+        simulatePriceChange.trendState.remaining--;
     } else {
         // Reset trend when it ends
-        simulatePriceChange.trendState[currency] = {
+        simulatePriceChange.trendState = {
             remaining: Math.floor(Math.random() * 10) + 5, // New trend length
             direction: Math.random() < dynamicProbability ? 1 : -1, // Random direction
         };
@@ -165,6 +169,7 @@ function simulatePriceChange(currentPrice, currency) {
     let newPrice = currentPrice * (1 + changePercentage);
 
     // Define multipliers
+    const fastIncreaseMultiplier = 1.01; // Boost price faster
     const slowIncreaseMultiplier = 0.999; // Slow down price growth
 
     // Apply multipliers based on price range
@@ -209,12 +214,9 @@ function simulatePriceChange(currentPrice, currency) {
         return Math.random() * (1.001 - 0.999) + 0.999; // Tiny fluctuation around 1.00
     }
 
+    // Format price for low-value assets
     return Math.max(newPrice, 0.0000000000001); // Ensure no negative or near-zero prices
 }
-
-
-// REMOVED simulateExchangeRateChange function as it is no longer needed
-// function simulateExchangeRateChange(currentRate) { ... } // REMOVED
 
 
 // CMC API Key
