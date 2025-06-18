@@ -110,22 +110,25 @@ function simulatePriceChange(currentPrice, currency) {
     let trendLength = Math.floor(Math.random() * 10) + 5; // 5 to 15 iterations
     let trendStrength = Math.random() * 0.02 + 0.01; // 1% to 3% per step
 
-    // Track start time if not already set (specific to this simulation logic)
+    // Track start time if not already set
     if (!simulatePriceChange.startTime) {
         simulatePriceChange.startTime = Date.now(); // Record the program's start time in milliseconds
     }
 
-    // Calculate elapsed time in seconds (specific to this simulation logic)
+    // Calculate elapsed time in seconds
     const elapsedTime = (Date.now() - simulatePriceChange.startTime) / 10;
 
-    // Function to calculate dynamic probability that toggles every minute (specific to this simulation logic)
+    // Function to calculate dynamic probability that toggles every minute
     function getDynamicProbability(elapsed) {
         const minutes = Math.floor(elapsed / 60); // Get elapsed time in whole minutes
         return minutes % 2 === 0 ? 0.58 : 0.45; // Alternate between 0.7 and 0.5 every minute
     }
 
-    // Calculate dynamic probability based on elapsed time (specific to this simulation logic)
+    // Calculate dynamic probability based on elapsed time
     let dynamicProbability = getDynamicProbability(elapsedTime);
+
+    // Debug the calculated probability and elapsed time
+    // console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
 
     // Minor fluctuations outside of trends
     let fluctuationStrength = Math.random() * 0.005 * (Math.random() < dynamicProbability ? -1 : 1);
@@ -134,8 +137,7 @@ function simulatePriceChange(currentPrice, currency) {
     const spikeProbability = 0.005;
     const spikeMagnitude = Math.random() * 0.1 + 0.05; // 5% to 15%
 
-    // Track trend state (specific to this simulation logic)
-    // Use a unique key for each currency's trendState to avoid conflicts
+    // Track trend state per currency
     if (!simulatePriceChange.trendStatePerCurrency) {
         simulatePriceChange.trendStatePerCurrency = {};
     }
@@ -170,6 +172,7 @@ function simulatePriceChange(currentPrice, currency) {
     let newPrice = currentPrice * (1 + changePercentage);
 
     // Define multipliers
+    // const fastIncreaseMultiplier = 1.01; // Not used in provided snippet
     const slowIncreaseMultiplier = 0.999; // Slow down price growth
 
     // Apply multipliers based on price range
@@ -288,6 +291,7 @@ async function fetchPricesFromCMC() {
 }
 
 // Function to initialize realPrices by attempting an API call for all supported cryptos or using sensible defaults
+// This function will be called once on server startup.
 async function initializeRealPrices() {
     console.log('Initializing real prices on server startup...');
     const symbolsToFetch = CMC_API_SYMBOLS.join(',');
