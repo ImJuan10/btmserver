@@ -46,10 +46,10 @@ let simulationPrices = {
     USDT: 1,
 };
 
-// Real prices will be fetched from CoinGecko API
+// Real prices will be initially set by initializeRealPrices(), then updated by fetchPricesFromCoinGecko()
 let realPrices = {
     BTC: 0, ETH: 0, DOGE: 0, SHIB: 0, TON: 0,
-    TRX: 0, LTC: 0, LUNA: 0, BC: 0.0001, USDT: 1,
+    TRX: 0, LTC: 0, LUNA: 0, BC: 0, USDT: 1,
 };
 
 // Last successful real prices (for fallback)
@@ -126,6 +126,9 @@ function simulatePriceChange(currentPrice, currency) {
 
     // Calculate dynamic probability based on elapsed time (specific to this simulation logic)
     let dynamicProbability = getDynamicProbability(elapsedTime);
+
+    // Debug the calculated probability and elapsed time
+    // console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
 
     // Minor fluctuations outside of trends
     let fluctuationStrength = Math.random() * 0.005 * (Math.random() < dynamicProbability ? -1 : 1);
@@ -286,6 +289,60 @@ async function fetchPricesFromCoinGecko() {
         realPrices = { ...lastSuccessfulRealPrices, BC: simulationPrices['BC'] };
         console.warn('Network error during CoinGecko fetch. Using last successful real prices or initial values.');
     }
+}
+
+// Function to initialize realPrices by attempting an API call or using sensible defaults
+// Moved this function definition before its potential call in app.listen
+async function initializeRealPrices() {
+    console.log('Initializing real prices on server startup...');
+    const coinGeckoIdsToInitialize = {
+        BTC: 'bitcoin', ETH: 'ethereum', DOGE: 'dogecoin', SHIB: 'shiba-inu', TON: 'toncoin',
+        TRX: 'tron', LTC: 'litecoin', LUNA: 'terra-luna',
+    };
+    const vsCurrency = 'usdt';
+    const coinGeckoApiBase = 'https://api.coingecko.com/api/v3/simple/price';
+
+    try {
+        const response = await fetch(`${coinGeckoApiBase}?ids=${Object.values(coinGeckoIdsToInitialize).join(',')}&vs_currencies=${vsCurrency}`);
+        if (response.ok) {
+            const data = await response.json();
+            for (const currency in coinGeckoIdsToInitialize) {
+                const id = coinGeckoIdsToInitialize[currency];
+                if (data[id] && data[id][vsCurrency] !== undefined) {
+                    realPrices[currency] = parseFloat(data[id][vsCurrency]);
+                } else {
+                    console.warn(`Initial CoinGecko price for ${currency} (${id}) not found or undefined. Using hardcoded default.`);
+                    realPrices[currency] = {
+                        BTC: 69500, ETH: 3800, DOGE: 0.16, SHIB: 0.000028, TON: 7.2,
+                        TRX: 0.11, LTC: 75, LUNA: 0.00013,
+                    }[currency] || 0;
+                }
+            }
+        } else {
+            console.warn(`Could not fetch initial prices from CoinGecko. Status: ${response.status}. Using hardcoded defaults.`);
+            for (const currency of Object.keys(coinGeckoIdsToInitialize)) {
+                 realPrices[currency] = {
+                    BTC: 69500, ETH: 3800, DOGE: 0.16, SHIB: 0.000028, TON: 7.2,
+                    TRX: 0.11, LTC: 75, LUNA: 0.00013,
+                }[currency] || 0;
+            }
+        }
+    } catch (error) {
+        console.error('Error during initial CoinGecko fetch:', error);
+        console.warn('Network error during initial CoinGecko fetch. Using hardcoded defaults for real prices.');
+        for (const currency of Object.keys(coinGeckoIdsToInitialize)) {
+             realPrices[currency] = {
+                BTC: 69500, ETH: 3800, DOGE: 0.16, SHIB: 0.000028, TON: 7.2,
+                TRX: 0.11, LTC: 75, LUNA: 0.00013,
+            }[currency] || 0;
+        }
+    }
+
+    realPrices.BC = simulationPrices['BC']; // BC price always from simulation
+    realPrices.USDT = 1; // USDT always 1
+
+    lastSuccessfulRealPrices = { ...realPrices }; // Set initial last successful prices
+    console.log('Real prices initialized:', realPrices);
 }
 
 
@@ -580,5 +637,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     // Initialize real prices once when the server starts
-    initializeRealPrices(); // Initial fetch
+    initializeRealPrices();
 });
