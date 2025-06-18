@@ -55,12 +55,12 @@ let realPrices = {
 // Last successful real prices (for fallback) - important for when CMC fetch fails
 let lastSuccessfulRealPrices = { ...realPrices };
 
-// Simulated exchange rates from USDT to other fiat currencies
+// Simulated exchange rates from USDT to other fiat currencies (now static)
 let exchangeRates = {
     USDT: 1, // USDT to USDT is 1
-    USD: 0.9995, // Example: 1 USDT = 0.9995 USD (can fluctuate)
-    EUR: 0.92,   // Example: 1 USDT = 0.92 EUR (can fluctuate)
-    SOL: 3.75    // New: 1 USDT = 3.75 Peruvian Sol (initial value)
+    USD: 0.9995, // Example: 1 USDT = 0.9995 USD (now static)
+    EUR: 0.92,   // Example: 1 USDT = 0.92 EUR (now static)
+    SOL: 3.75    // New: 1 USDT = 3.75 Peruvian Sol (now static)
 };
 
 // Separate transactions arrays for simulation and real modes
@@ -213,12 +213,9 @@ function simulatePriceChange(currentPrice, currency) {
 }
 
 
-// Simulate price changes for fiat exchange rates
-function simulateExchangeRateChange(currentRate) {
-    const fluctuation = (Math.random() - 0.5) * 0.005;
-    let newRate = currentRate + fluctuation;
-    return Math.max(0.001, newRate);
-}
+// REMOVED simulateExchangeRateChange function as it is no longer needed
+// function simulateExchangeRateChange(currentRate) { ... } // REMOVED
+
 
 // CMC API Key
 const CMC_API_KEY = 'fb3d7be2-38b1-4afd-b436-7ac1c56a8c49'; // Your provided API Key
@@ -343,12 +340,13 @@ setInterval(() => {
 setInterval(fetchPricesFromCMC, 15000); // Attempt to fetch from CMC every 15 seconds
 
 
-// Periodically update exchange rates
+// Periodically update exchange rates (only initial values are used now)
 setInterval(() => {
-    exchangeRates['USD'] = simulateExchangeRateChange(exchangeRates['USD']);
-    exchangeRates['EUR'] = simulateExchangeRateChange(exchangeRates['EUR']);
-    exchangeRates['SOL'] = simulateExchangeRateChange(exchangeRates['SOL']);
-}, 5000);
+    // No simulation for exchange rates now, they remain constant after initial definition
+    // This block now just serves as a placeholder if future static updates were desired.
+    // The values are already set in the `exchangeRates` object.
+}, 5000); // This interval will still fire but do nothing for exchangeRates
+
 
 // Endpoint to get the current prices based on mode
 app.get('/prices', (req, res) => {
