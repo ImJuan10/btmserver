@@ -103,6 +103,8 @@ const realHistoricalPrices = {
     TRX: [], LTC: [], LUNA: [], BC: [], USDT: [],
 };
 
+// New variable for market hack, default to 1
+let marketHackMultiplier = 1;
 
 function simulatePriceChange(currentPrice, currency) {
     // Configuration for trends
@@ -121,7 +123,7 @@ function simulatePriceChange(currentPrice, currency) {
     // Function to calculate dynamic probability that toggles every minute
     function getDynamicProbability(elapsed) {
         const minutes = Math.floor(elapsed / 60); // Get elapsed time in whole minutes
-        return minutes % 2 === 0 ? 0.58 : 0.45; // Alternate between 0.7 and 0.5 every minute
+        return minutes % 2 === 0 ? 0.58 * marketHackMultiplier : 0.45 * marketHackMultiplier; // Alternate between 0.7 and 0.5 every minute
     }
 
     // Calculate dynamic probability based on elapsed time
@@ -613,6 +615,30 @@ app.get('/balances', (req, res) => {
     const historicalBalancesToReturn = (mode === 'real') ? realHistoricalBalances : simulationHistoricalBalances;
     res.json(historicalBalancesToReturn);
 });
+
+// New endpoint for market hack
+app.post('/market-hack', (req, res) => {
+    const { direction } = req.body; // 'up' or 'down'
+
+    if (direction === 'up') {
+        marketHackMultiplier = 1.5; // Boost prices
+        console.log('Market hack: Prices boosted (x1.5)');
+    } else if (direction === 'down') {
+        marketHackMultiplier = 0.7; // Reduce prices
+        console.log('Market hack: Prices reduced (x0.7)');
+    } else {
+        return res.status(400).json({ message: 'Invalid direction. Use "up" or "down".' });
+    }
+
+    // Reset marketHackMultiplier to 1 after 60 seconds
+    setTimeout(() => {
+        marketHackMultiplier = 1;
+        console.log('Market hack: Prices reset to normal (x1)');
+    }, 60000); // 60 seconds
+
+    res.json({ message: `Market hack applied: prices will ${direction === 'up' ? 'rise' : 'fall'} for 60 seconds.` });
+});
+
 
 app.get('/', (req, res) => {
     res.send('<h1>Bit The Market</h1><p>Your Node.js app is running!</p>');
