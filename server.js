@@ -106,58 +106,34 @@ const realHistoricalPrices = {
 // New variable for market hack, default to 1
 let marketHackMultiplier = 1;
 
-// Variables for dynamic probability logic
-let dynamicProbability = 1;
-let dynamicProbabilityTrend = 'decreasing'; // 'decreasing' or 'increasing'
-let dynamicProbabilityCounter = 0;
-let dynamicProbabilityThreshold = 0; // The random time until change
-
-function setNextDynamicProbabilityThreshold() {
-    if (dynamicProbabilityTrend === 'decreasing') {
-        dynamicProbabilityThreshold = Math.floor(Math.random() * (60 - 30 + 1)) + 30; // Random between 30 and 60
-        console.log(`Dynamic probability will decrease for ${dynamicProbabilityThreshold} seconds.`);
-    } else { // 'increasing'
-        dynamicProbabilityThreshold = Math.floor(Math.random() * (65 - 35 + 1)) + 35; // Random between 35 and 65
-        console.log(`Dynamic probability will increase for ${dynamicProbabilityThreshold} seconds.`);
-    }
-    dynamicProbabilityCounter = 0; // Reset counter for the new phase
-}
-
-// Initialize the first threshold
-setNextDynamicProbabilityThreshold();
-
-
 function simulatePriceChange(currentPrice, currency) {
     // Configuration for trends
     let trendDirection = Math.random() < 0.55 ? 1 : -1; // 1 for upward, -1 for downward
     let trendLength = Math.floor(Math.random() * 10) + 5; // 5 to 15 iterations
     let trendStrength = Math.random() * 0.02 + 0.01; // 1% to 3% per step
 
-    // Update dynamic probability
-    dynamicProbabilityCounter++;
-    if (dynamicProbabilityCounter >= dynamicProbabilityThreshold) {
-        if (dynamicProbabilityTrend === 'decreasing') {
-            dynamicProbability = 1; // Reset to 1 after decreasing phase
-            dynamicProbabilityTrend = 'increasing';
-        } else { // 'increasing'
-            dynamicProbability = 1; // Reset to 1 after increasing phase
-            dynamicProbabilityTrend = 'decreasing';
-        }
-        setNextDynamicProbabilityThreshold(); // Set new threshold for the next phase
-    } else {
-        if (dynamicProbabilityTrend === 'decreasing') {
-            dynamicProbability = Math.max(0.1, 1 - (dynamicProbabilityCounter / dynamicProbabilityThreshold)); // Decrease from 1 to 0.1
-        } else { // 'increasing'
-            dynamicProbability = Math.min(2.0, 1 + (dynamicProbabilityCounter / dynamicProbabilityThreshold)); // Increase from 1 to 2.0 (or another max value)
-        }
+    // Track start time if not already set
+    if (!simulatePriceChange.startTime) {
+        simulatePriceChange.startTime = Date.now(); // Record the program's start time in milliseconds
     }
 
-    // Apply market hack multiplier to dynamicProbability
-    let effectiveDynamicProbability = dynamicProbability * marketHackMultiplier;
+    // Calculate elapsed time in seconds
+    const elapsedTime = (Date.now() - simulatePriceChange.startTime) / 10;
 
+    // Function to calculate dynamic probability that toggles every minute
+    function getDynamicProbability(elapsed) {
+        const minutes = Math.floor(elapsed / 60); // Get elapsed time in whole minutes
+        return minutes % 2 === 0 ? 0.58 * marketHackMultiplier : 0.45 * marketHackMultiplier; // Alternate between 0.7 and 0.5 every minute
+    }
+
+    // Calculate dynamic probability based on elapsed time
+    let dynamicProbability = getDynamicProbability(elapsedTime);
+
+    // Debug the calculated probability and elapsed time
+    console.debug(`Dynamic Probability after ${elapsedTime.toFixed(1)} seconds is ${dynamicProbability}`);
 
     // Minor fluctuations outside of trends
-    let fluctuationStrength = Math.random() * 0.005 * (Math.random() < effectiveDynamicProbability ? -1 : 1);
+    let fluctuationStrength = Math.random() * 0.005 * (Math.random() < dynamicProbability ? -1 : 1);
 
     // Spike/Dip Probability
     const spikeProbability = 0.005;
@@ -181,14 +157,14 @@ function simulatePriceChange(currentPrice, currency) {
         // Reset trend when it ends
         simulatePriceChange.trendState = {
             remaining: Math.floor(Math.random() * 10) + 5, // New trend length
-            direction: Math.random() < effectiveDynamicProbability ? 1 : -1, // Random direction
+            direction: Math.random() < dynamicProbability ? 1 : -1, // Random direction
         };
         changePercentage = fluctuationStrength;
     }
 
     // Apply spike/dip randomly
     if (Math.random() < spikeProbability) {
-        changePercentage += spikeMagnitude * (Math.random() < effectiveDynamicProbability ? -1 : 1);
+        changePercentage += spikeMagnitude * (Math.random() < dynamicProbability ? -1 : 1);
     }
 
     // Calculate new price
