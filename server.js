@@ -106,26 +106,25 @@ const realHistoricalPrices = {
 // New variable for market hack, default to 1
 let marketHackMultiplier = 1;
 
-// Variables for dynamic probability logic
-let dynamicProbability = 0.5; // Starts at 0.5
-let dynamicProbabilityTrend = 'decreasing'; // 'decreasing' or 'increasing'
-let dynamicProbabilityCounter = 0;
-let dynamicProbabilityThreshold = 0; // The random time until change
+// Declare currentDynamicProbability at a higher scope
+let currentDynamicProbability = 0; // Initialize it
 
-function setNextDynamicProbabilityThreshold() {
-    if (dynamicProbabilityTrend === 'decreasing') {
-        dynamicProbabilityThreshold = Math.floor(Math.random() * (60 - 30 + 1)) + 30; // Random between 30 and 60
-        console.log(`Dynamic probability will decrease for ${dynamicProbabilityThreshold} ticks.`);
-    } else { // 'increasing'
-        dynamicProbabilityThreshold = Math.floor(Math.random() * (65 - 35 + 1)) + 35; // Random between 35 and 65
-        console.log(`Dynamic probability will increase for ${dynamicProbabilityThreshold} ticks.`);
-    }
-    dynamicProbabilityCounter = 0; // Reset counter for the new phase
+// Variables to manage the dynamic probability state
+let probabilityState = {
+    targetProb: 0.58,
+    duration: 0, // seconds
+    remainingTime: 0,
+    startTime: Date.now(),
+    transitioning: false,
+    startTransitionProb: 0,
+    endTransitionProb: 0,
+    transitionDuration: 0,
+    transitionElapsedTime: 0
+};
+
+function generateRandomDuration() {
+    return Math.floor(Math.random() * (45 - 30 + 1)) + 30; // Between 30 and 45 seconds
 }
-
-// Initialize the first threshold
-setNextDynamicProbabilityThreshold();
-
 
 function simulatePriceChange(currentPrice, currency) {
     // Configuration for trends
@@ -133,32 +132,55 @@ function simulatePriceChange(currentPrice, currency) {
     let trendLength = Math.floor(Math.random() * 10) + 5; // 5 to 15 iterations
     let trendStrength = Math.random() * 0.02 + 0.01; // 1% to 3% per step
 
-    // Update dynamic probability
-    dynamicProbabilityCounter++;
-    if (dynamicProbabilityCounter >= dynamicProbabilityThreshold) {
-        if (dynamicProbabilityTrend === 'decreasing') {
-            dynamicProbability = 0.5; // Reset to 0.5 after decreasing phase
-            dynamicProbabilityTrend = 'increasing';
-        } else { // 'increasing'
-            dynamicProbability = 0.5; // Reset to 0.5 after increasing phase
-            dynamicProbabilityTrend = 'decreasing';
+    // Update dynamic probability logic
+    const currentTime = Date.now();
+    const elapsedSinceLastUpdate = (currentTime - probabilityState.startTime) / 1000; // in seconds
+
+    if (!probabilityState.transitioning) {
+        // If not transitioning, check if it's time to start a transition or update static phase
+        if (elapsedSinceLastUpdate >= probabilityState.duration) {
+            probabilityState.startTime = currentTime; // Reset start time for the new phase
+            probabilityState.transitioning = true;
+            probabilityState.startTransitionProb = currentDynamicProbability;
+
+            if (probabilityState.targetProb === 0.58) {
+                probabilityState.targetProb = 0.46;
+                probabilityState.endTransitionProb = 0.46;
+            } else {
+                probabilityState.targetProb = 0.58;
+                probabilityState.endTransitionProb = 0.58;
+            }
+            probabilityState.transitionDuration = Math.floor(Math.random() * (45 - 30 + 1)) + 30; // New random duration for the next phase
+            probabilityState.transitionElapsedTime = 0;
+        } else {
+            // Still in a static phase, maintain the target probability
+            currentDynamicProbability = probabilityState.targetProb * marketHackMultiplier;
         }
-        setNextDynamicProbabilityThreshold(); // Set new threshold for the next phase
     } else {
-        const changePerTick = 1 / dynamicProbabilityThreshold;
-        if (dynamicProbabilityTrend === 'decreasing') {
-            dynamicProbability = Math.max(0, 0.5 - (dynamicProbabilityCounter * changePerTick)); // Decrease from 0.5 to 0
-        } else { // 'increasing'
-            dynamicProbability = Math.min(1, 0.5 + (dynamicProbabilityCounter * changePerTick)); // Increase from 0.5 to 1
+        // Currently transitioning
+        probabilityState.transitionElapsedTime += (currentTime - probabilityState.startTime) / 1000;
+        probabilityState.startTime = currentTime; // Reset for next tick
+
+        if (probabilityState.transitionElapsedTime >= probabilityState.transitionDuration) {
+            // Transition finished, set to target and reset for next static phase
+            currentDynamicProbability = probabilityState.endTransitionProb * marketHackMultiplier;
+            probabilityState.transitioning = false;
+            probabilityState.duration = generateRandomDuration(); // Set duration for the new static phase
+            probabilityState.remainingTime = probabilityState.duration; // Reset remaining time
+            console.log(`Dynamic Probability stabilized at ${currentDynamicProbability} for ${probabilityState.duration} seconds.`);
+        } else {
+            // Calculate interpolated probability
+            const progress = probabilityState.transitionElapsedTime / probabilityState.transitionDuration;
+            currentDynamicProbability = (probabilityState.startTransitionProb + (probabilityState.endTransitionProb - probabilityState.startTransitionProb) * progress) * marketHackMultiplier;
         }
     }
 
-    // Apply market hack multiplier to dynamicProbability
-    let effectiveDynamicProbability = dynamicProbability * marketHackMultiplier;
 
+    // Debug the calculated probability and elapsed time
+    console.debug(`Dynamic Probability: ${currentDynamicProbability.toFixed(4)} (State: ${probabilityState.transitioning ? 'Transitioning' : 'Static'})`);
 
     // Minor fluctuations outside of trends
-    let fluctuationStrength = Math.random() * 0.005 * (Math.random() < effectiveDynamicProbability ? -1 : 1);
+    let fluctuationStrength = Math.random() * 0.005 * (Math.random() < currentDynamicProbability ? -1 : 1);
 
     // Spike/Dip Probability
     const spikeProbability = 0.005;
@@ -182,14 +204,14 @@ function simulatePriceChange(currentPrice, currency) {
         // Reset trend when it ends
         simulatePriceChange.trendState = {
             remaining: Math.floor(Math.random() * 10) + 5, // New trend length
-            direction: Math.random() < effectiveDynamicProbability ? 1 : -1, // Random direction
+            direction: Math.random() < currentDynamicProbability ? 1 : -1, // Random direction based on currentDynamicProbability
         };
         changePercentage = fluctuationStrength;
     }
 
     // Apply spike/dip randomly
     if (Math.random() < spikeProbability) {
-        changePercentage += spikeMagnitude * (Math.random() < effectiveDynamicProbability ? -1 : 1);
+        changePercentage += spikeMagnitude * (Math.random() < currentDynamicProbability ? -1 : 1);
     }
 
     // Calculate new price
@@ -641,12 +663,6 @@ app.get('/balances', (req, res) => {
     res.json(historicalBalancesToReturn);
 });
 
-// Endpoint to get current market sentiment
-app.get('/market-sentiment', (req, res) => {
-    res.json({ dynamicProbability: dynamicProbability });
-});
-
-
 // New endpoint for market hack
 app.post('/market-hack', (req, res) => {
     const { direction } = req.body; // 'up' or 'down'
@@ -670,6 +686,10 @@ app.post('/market-hack', (req, res) => {
     res.json({ message: `Market hack applied: prices will ${direction === 'up' ? 'rise' : 'fall'} for 60 seconds.` });
 });
 
+// Endpoint for dynamic probability
+app.get('/dynamic-probability', (req, res) => {
+    res.json({ dynamicProbability: currentDynamicProbability });
+});
 
 app.get('/', (req, res) => {
     res.send('<h1>Bit The Market</h1><p>Your Node.js app is running!</p>');
