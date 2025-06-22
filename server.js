@@ -59,7 +59,7 @@ let lastSuccessfulRealPrices = { ...realPrices };
 let exchangeRates = {
     USDT: 1, // USDT to USDT is 1
     USD: 0.9995, // Example: 1 USDT = 0.9995 USD (now static)
-    EUR: 0.92,   // Example: 1 USDT = 0.92 EUR (now static)
+    EUR: 0.92,    // Example: 1 USDT = 0.92 EUR (now static)
     SOL: 3.75    // New: 1 USDT = 3.75 Peruvian Sol (now static)
 };
 
@@ -76,6 +76,7 @@ function getCurrentDateTime() {
 }
 
 // Add transaction to the respective transaction table
+// MODIFIED: Use unshift to add to the beginning, so newest transactions appear first
 function addTransaction(mode, { orderDate, type, pair, price, amount, total }) {
     const transactionRecord = {
         orderDate,
@@ -86,9 +87,9 @@ function addTransaction(mode, { orderDate, type, pair, price, amount, total }) {
         total,
     };
     if (mode === 'real') {
-        realTransactions.push(transactionRecord);
+        realTransactions.unshift(transactionRecord); // Add to the beginning
     } else {
-        simulationTransactions.push(transactionRecord);
+        simulationTransactions.unshift(transactionRecord); // Add to the beginning
     }
 }
 
@@ -226,14 +227,14 @@ function simulatePriceChange(currentPrice, currency) {
         if (currency === 'ETH') {
             newPrice *= slowIncreaseMultiplier;
         }
-    } 
+    }
 
     if (newPrice >= 5.75) {
         if (currency === 'DOGE') {
             newPrice *= slowIncreaseMultiplier;
         }
     }
-    
+
     if (newPrice >= 0.075) {
         if (currency === 'SHIB') {
             newPrice *= slowIncreaseMultiplier;
@@ -290,7 +291,7 @@ async function fetchPricesFromCMC() {
 
         if (response.ok) {
             const data = await response.json();
-            
+
             let fetchedCMCData = {};
             for (const symbol of CMC_API_SYMBOLS) {
                 if (data.data && data.data[symbol] && data.data[symbol].quote && data.data[symbol].quote[vsCurrency] && data.data[symbol].quote[vsCurrency].price !== undefined) {
@@ -421,6 +422,7 @@ app.get('/exchange-rates', (req, res) => {
 // Endpoint to get transactions based on mode
 app.get('/transactions', (req, res) => {
     const mode = req.query.mode || 'simulation';
+    // Transactions are already stored in reverse chronological order due to unshift
     if (mode === 'real') {
         res.json(realTransactions);
     } else {
