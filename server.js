@@ -479,11 +479,7 @@ app.post('/buy', (req, res) => {
 
     addTransaction(mode, newTransaction);
 
-    fetch('https://btmserver.onrender.com/notify-transaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTransaction),
-    });
+    
 
     res.json({
         message: 'Transaction successful!',
@@ -704,4 +700,5 @@ app.listen(PORT, () => {
     // Initialize real prices once when the server starts with CMC fetch
     initializeRealPrices();
 });
+
 
