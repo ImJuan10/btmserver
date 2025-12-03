@@ -444,7 +444,7 @@ app.get('/holdings', (req, res) => {
 app.post('/buy', (req, res) => {
     const { mode, pair, price, amount, total } = req.body;
 
-    if (!mode || !pair || price <= 0 || amount <= 0 || total <= 0) {
+    if (!mode || !pair || price <= 0 || amount <= 0) {
         return res.status(400).json({ message: 'Invalid transaction details.' });
     }
 
@@ -494,7 +494,7 @@ app.post('/buy', (req, res) => {
 
 // Endpoint to handle sell orders
 app.post('/sell', (req, res) => {
-    const { mode, pair, price, amount, total } = req.body;
+    const { mode, pair, price, amount } = req.body;
 
     if (!mode || !pair || price <= 0 || amount <= 0 || total <= 0) {
         return res.status(400).json({ message: 'Invalid transaction details.' });
@@ -704,3 +704,4 @@ app.listen(PORT, () => {
     // Initialize real prices once when the server starts with CMC fetch
     initializeRealPrices();
 });
+
