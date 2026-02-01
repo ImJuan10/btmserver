@@ -490,8 +490,10 @@ app.post('/buy', (req, res) => {
 
 // Endpoint to handle sell orders
 app.post('/sell', (req, res) => {
-    const { mode, pair, price, amount } = req.body;
+    // FIX: Added 'total' to the destructuring list
+    const { mode, pair, price, amount, total } = req.body;
 
+    // Now 'total' exists, so this check won't crash the server
     if (!mode || !pair || price <= 0 || amount <= 0 || total <= 0) {
         return res.status(400).json({ message: 'Invalid transaction details.' });
     }
@@ -501,7 +503,7 @@ app.post('/sell', (req, res) => {
     let targetHoldings = (mode === 'real') ? realHoldings : simulationHoldings;
     let currentPrices = (mode === 'real') ? realPrices : simulationPrices;
 
-    // Special handling for BC coin: its price always comes from simulationPrices for transactions
+    // Special handling for BC coin
     if (baseCurrency === 'BC') {
         currentPrices['BC'] = simulationPrices['BC'];
     }
@@ -527,18 +529,19 @@ app.post('/sell', (req, res) => {
 
     addTransaction(mode, newTransaction);
 
+    // Note: The self-referential fetch below is risky if the URL isn't perfect, 
+    // but the transaction is already processed by this point.
     fetch('https://btmserver.onrender.com/notify-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTransaction),
-    });
+    }).catch(err => console.error("Notification error:", err)); // Added catch to prevent unhandled promise rejections
 
     res.json({
         message: 'Sell order successful!',
         holdings: targetHoldings,
     });
 });
-
 // Update historical prices arrays periodically
 function updateHistoricalPriceArrays() {
     // Update simulation historical prices
@@ -700,5 +703,4 @@ app.listen(PORT, () => {
     // Initialize real prices once when the server starts with CMC fetch
     initializeRealPrices();
 });
-
 
