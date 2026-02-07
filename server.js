@@ -326,9 +326,66 @@ app.post('/market-hack', (req, res) => {
 
 app.get('/dynamic-probability', (req, res) => res.json({ dynamicProbability: currentDynamicProbability }));
 
+// --- NEW USER DATABASE LOGIC ---
+
+// Simulated database of users
+let users = {
+    "ADMIN_WALLET": {
+        holdings: { BTC: 1, ETH: 10, USDT: 1000, BC: 50000 },
+        casino: { USDT: 0, BC: 0 }
+    },
+    "USER_DEPOSIT_VAULT": {
+        holdings: { BTC: 0, ETH: 0, USDT: 1000000, BC: 1000000 },
+        casino: { USDT: 0, BC: 0 }
+    }
+};
+
+// Function to generate a new wallet address for a user
+function generateAddress() {
+    return "0x" + Math.random().toString(16).slice(2, 10).toUpperCase();
+}
+
+// --- NEW TRANSFER ENDPOINT ---
+
+app.post('/transfer-between-wallets', (req, res) => {
+    const { fromAddress, toAddress, amount, currency } = req.body;
+
+    if (!users[fromAddress] || !users[toAddress]) {
+        return res.status(404).json({ message: "One or both wallet addresses not found." });
+    }
+
+    if (users[fromAddress].holdings[currency] < amount) {
+        return res.status(400).json({ message: "Insufficient balance in sender wallet." });
+    }
+
+    // Move the money
+    users[fromAddress].holdings[currency] -= parseFloat(amount);
+    users[toAddress].holdings[currency] = (users[toAddress].holdings[currency] || 0) + parseFloat(amount);
+
+    // Record the transaction for the sender
+    const tx = {
+        orderDate: getCurrentDateTime(),
+        type: 'Transfer Out',
+        pair: currency,
+        price: 'N/A',
+        amount: `${amount} ${currency}`,
+        total: `To: ${toAddress.substring(0,8)}...`
+    };
+    
+    // In a real app, you'd save this to a transaction list for BOTH users
+    transactions.unshift(tx);
+
+    res.json({ 
+        message: "Transfer successful!", 
+        senderBalance: users[fromAddress].holdings,
+        recipientBalance: users[toAddress].holdings 
+    });
+});
+
 app.get('/', (req, res) => res.send('<h1>Bit The Market - Simulation Server</h1>'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Simulation Server running on port ${PORT}`);
 });
+
