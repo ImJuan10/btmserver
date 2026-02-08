@@ -150,7 +150,7 @@ function simulatePriceChange(currentPrice, currency) {
 
     let newPrice = currentPrice * (1 + changePercentage);
 
-    // Hardcoded Stabilizers (from your original file)
+    // Hardcoded Stabilizers
     const slowDown = 0.999;
     if (newPrice >= 3857 && currency === 'ETH') newPrice *= slowDown;
     if (newPrice >= 5.75 && currency === 'DOGE') newPrice *= slowDown;
@@ -287,21 +287,67 @@ app.post('/transfer-to-wallet', (req, res) => {
     res.json({ message: 'Funds moved back to Main Wallet', holdings, casinoHoldings });
 });
 
+// --- CASINO DATA STORAGE ---
+const casinoHistory = []; // Stores the last 50 bets
+
+// 1. Get History
+app.get('/casino/history', (req, res) => {
+    res.json(casinoHistory);
+});
+
+// 2. Play Game
 app.post('/casino/play', (req, res) => {
-    const { amount, currency, game } = req.body;
-    if (casinoHoldings[currency] < amount) return res.status(400).json({ message: 'Insufficient casino funds' });
+    const { amount, currency, winChance } = req.body;
     
-    const win = Math.random() > 0.52; // House edge of 2%
-    if (win) {
-        casinoHoldings[currency] += parseFloat(amount); // Wins double
-    } else {
-        casinoHoldings[currency] -= parseFloat(amount);
+    // Validate
+    if (casinoHoldings[currency] < amount) {
+        return res.status(400).json({ message: 'Insufficient casino funds' });
     }
+
+    // Game Math
+    const chance = parseFloat(winChance) || 50;
+    const target = 100 - chance; // Roll OVER this target to win
+    const multiplier = 99 / chance; // 1% House Edge
+
+    // Generate Roll (0.00 to 100.00)
+    const roll = Math.random() * 100;
     
+    // Win Condition: Roll > Target (Green Zone)
+    const isWin = roll >= target;
+
+    let profit = 0;
+    let payout = 0;
+
+    if (isWin) {
+        payout = amount * multiplier;
+        profit = payout - amount;
+        casinoHoldings[currency] += profit; // Add pure profit
+    } else {
+        profit = -amount;
+        casinoHoldings[currency] -= amount; // Deduct bet
+    }
+
+    // Create Record
+    const betRecord = {
+        id: Date.now() + Math.random(), // Unique ID
+        time: new Date(),
+        bet: amount,
+        multiplier: multiplier.toFixed(4),
+        target: target.toFixed(2),
+        roll: roll.toFixed(2),
+        win: isWin,
+        profit: profit,
+        currency: currency
+    };
+
+    // Save to History (Keep last 50)
+    casinoHistory.unshift(betRecord);
+    if (casinoHistory.length > 50) casinoHistory.pop();
+
     res.json({ 
-        result: win ? 'win' : 'lose', 
-        amount: win ? amount : -amount,
-        newBalance: casinoHoldings[currency] 
+        result: isWin ? 'win' : 'lose', 
+        newBalance: casinoHoldings[currency],
+        record: betRecord 
     });
 });
 
@@ -388,4 +434,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Simulation Server running on port ${PORT}`);
 });
-
